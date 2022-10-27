@@ -1,8 +1,10 @@
 from __future__ import annotations
 import math
-from typing import overload
+from typing import Literal, overload
 import cv2
-from PIL import Image as pilImage
+from PIL import Image as pilImage, \
+    ImageDraw as pilImageDraw, \
+    ImageFont as pilImageFont
 import numpy as np
 from pyevu import Vector2
 
@@ -41,6 +43,14 @@ class Util:
             else:
                 raise ValueError
         return result
+    
+    @staticmethod
+    def bgr_to_rgb(color: tuple[int, int, int]) -> tuple[int, int ,int]:
+        return tuple(list(color)[::-1])
+
+    @staticmethod
+    def rgb_to_bgr(color: tuple[int, int, int]) -> tuple[int, int ,int]:
+        return tuple(list(color)[::-1])
 
 class CvUtil:
     @staticmethod
@@ -136,3 +146,98 @@ class CvUtil:
             return Vector2(int(value.x), int(value.y))
         else:
             raise TypeError
+
+class PilUtil:
+    @staticmethod
+    def text(
+        img: pilImage.Image, text: str,
+        fontPath: str, fontSize: int, color: tuple[int, int, int],
+        position: tuple[float, float],
+        align: Literal['left', 'center', 'right']='left',
+        direction: Literal['rtl', 'ltr', 'ttb']='ltr'
+    ) -> pilImage.Image:
+        draw = pilImageDraw.Draw(img, mode=None)
+        font = pilImageFont.truetype(font=fontPath, size=fontSize)
+        w, h = draw.textsize(text, font=font, direction=direction)
+        position = (position[0] - w/2, position[1] - h/2)
+
+        draw.text(
+            xy=position,
+            text=text,
+            fill=color,
+            font=font,
+            align=align,
+            direction=direction
+        )
+        return img
+
+    @staticmethod
+    def ellipse(
+        img: pilImage.Image, center: tuple[float, float], axis: tuple[float, float],
+        fillColor: tuple[int, int, int]=None, outlineColor: tuple[int, int, int]=None,
+        outlineWidth: float=None
+    ) -> pilImage.Image:
+        p0 = (center[0] - axis[0], center[1] - axis[1])
+        p1 = (center[0] + axis[0], center[1] + axis[1])
+        shape: list[float] = list(p0) + list(p1)
+        draw = pilImageDraw.Draw(img, mode=None)
+        draw.ellipse(xy=shape, fill=fillColor, outline=outlineColor, width=outlineWidth)
+        return img
+
+    @staticmethod
+    def circle(
+        img: pilImage.Image, center: tuple[float, float], radius: float,
+        fillColor: tuple[int, int, int]=None, outlineColor: tuple[int, int, int]=None,
+        outlineWidth: float=None
+    ) -> pilImage.Image:
+        return PilUtil.ellipse(
+            img=img, center=center, axis=(radius, radius),
+            fillColor=fillColor, outlineColor=outlineColor,
+            outlineWidth=outlineWidth
+        )
+
+    @staticmethod
+    def hanko(
+        img: pilImage.Image, text: str,
+        fontPath: str, fontSize: int,
+        color: tuple[int, int, int],
+        position: tuple[float, float],
+        direction: Literal['rtl', 'ltr', 'ttb']='ttb',
+        outlineWidth: float=20,
+        marginOffset: float = 0, marginRatio: float = 0
+    ):
+        draw = pilImageDraw.Draw(img, mode=None)
+        font = pilImageFont.truetype(font=fontPath, size=fontSize)
+        w, h = draw.textsize(text, font=font, direction=direction)
+        r = int((w**2 + h**2)**0.5) * 0.5
+        r += marginRatio * r
+        r += marginOffset
+
+        draw = pilImageDraw.Draw(img, mode=None)
+        font = pilImageFont.truetype(font=fontPath, size=fontSize)
+        w, h = draw.textsize(text, font=font, direction=direction)
+        textPosition = (position[0] - w/2, position[1] - h/2)
+
+        draw.text(
+            xy=textPosition, text=text, fill=color,
+            font=font, direction=direction
+        )
+        PilUtil.circle(
+            img, center=position, radius=r,
+            fillColor=None, outlineColor=color,
+            outlineWidth=outlineWidth
+        )
+        return img
+
+    @staticmethod
+    def debug():
+        img = pilImage.new("RGB", (500, 500))
+        
+        import pycvu
+        fontPath = f"{pycvu.__path__[0]}/data/font/ipaexg.ttf"
+        PilUtil.hanko(
+            img, text="夏生", fontPath=fontPath, fontSize=150, color=(255, 0, 0),
+            position=(250, 250), direction='ttb', outlineWidth=20,
+            marginOffset=0, marginRatio=0.1
+        )
+        img.show()

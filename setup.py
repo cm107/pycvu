@@ -41,6 +41,7 @@ setup(
         'numpy>=1.23.4',
         'opencv-python>=4.6.0.66',
         'Pillow>=9.2.0',
+        'PyYAML>=6.0',
         'pyevu @ git+ssh://git@github.com/cm107/pyevu.git@master'
     ],
     python_requires='>=3.10',
