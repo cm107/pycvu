@@ -1,6 +1,7 @@
 from __future__ import annotations
 from functools import partial
-from typing import Callable, overload
+import json
+from typing import Callable, cast, overload
 import cv2
 import numpy as np
 from pyevu import Vector2
@@ -9,6 +10,125 @@ from ..util import CvUtil
 __all__ = [
     "Artist"
 ]
+
+"""
+TODO: Need to implement methods for drawing shapes and text randomly.
+"""
+
+import random
+from typing import Generic, TypeVar
+T = TypeVar('T', int, float)
+
+from ..base import Base, BaseHandler
+
+class Vector(Vector2, Base, Generic[T]):
+    def __init__(self, x: T, y: T):
+        assert type(x) is type(y)
+        assert type(x) in T.__constraints__
+        Vector2.__init__(self, x=x, y=y)
+        Base.__init__(self)
+    
+    def __str__(self) -> str:
+        return f"{type(self).__name__}[{self.generic_type.__name__}]({','.join([f'{key}={val}' for key, val in self.__dict__.items() if key != '__orig_class__'])})"
+
+    @property
+    def generic_type(self) -> type: # Note: Can't be called from __init__ or any other dunder method.
+        return self.__orig_class__.__args__[0]
+
+    @staticmethod
+    def debug():
+        intVec = Vector[int](1, 2)
+        print(f"{intVec=}")
+        print(f"{intVec.to_dict()=}")
+        print(f"{Vector[int].from_dict(intVec.to_dict())=}")
+        intVecCopy = Vector[int].from_dict(intVec.to_dict())
+
+class IntVectorList(BaseHandler[Vector[int]]):
+    def __init__(self, _objects: list[Vector[int]]=None):
+        super().__init__(_objects)
+    
+    @staticmethod
+    def debug():
+        vectors = IntVectorList([
+            Vector[int](1, 2), Vector[int](3, 4),
+            Vector[int](5, 6), Vector[int](7, 8),
+        ])
+                
+        print(f"{vectors.to_dict()=}")
+        print(f"{IntVectorList.from_dict(vectors.to_dict())=}")
+        assert vectors.to_dict() == IntVectorList.from_dict(vectors.to_dict()).to_dict()
+        assert vectors == IntVectorList.from_dict(vectors.to_dict())
+        print('Test passed')
+
+class GenericVectorList(BaseHandler[Vector[T]]):
+    def __init__(self, _objects: list[Vector[T]]=None):
+        super().__init__(_objects)
+
+    @staticmethod
+    def debug():
+        vectors = GenericVectorList[int]([
+            Vector[int](1, 2), Vector[int](3, 4),
+            Vector[int](5, 6), Vector[int](7, 8),
+        ])                
+        print(f"{vectors.to_dict()=}")
+        print(f"{GenericVectorList[int].from_dict(vectors.to_dict()).to_dict()=}")
+        assert vectors.to_dict() == GenericVectorList[int].from_dict(vectors.to_dict()).to_dict()
+        assert vectors == GenericVectorList[int].from_dict(vectors.to_dict())
+        print('Test passed')
+
+TV = TypeVar('TV', int, float, Vector)
+
+class Interval(Base, Generic[TV]):
+    def __init__(self, valMin: TV, valMax: TV):
+        super().__init__()
+        assert type(valMin) is type(valMax)
+        assert type(valMin) in TV.__constraints__
+        if type(valMin) in T.__constraints__:
+            assert valMin <= valMax
+        elif type(valMin) is Vector and type(valMax) is Vector:
+            assert valMin.generic_type is valMax.generic_type
+            assert valMin.x <= valMax.x and valMin.y <= valMax.y
+        else:
+            raise TypeError
+
+        self.valMin = valMin
+        self.valMax = valMax
+
+    @property
+    def generic_type(self) -> type: # Note: Can't be called from __init__
+        return self.__orig_class__.__args__[0]
+
+    def random(self) -> TV:
+        if self.generic_type is float:
+            randVal = random.random()
+            return self.valMin + (self.valMax - self.valMin) * randVal
+        elif self.generic_type is int:
+            return random.randint(self.valMin, self.valMax)
+        elif self.generic_type in [Vector[constraintType] for constraintType in T.__constraints__]:
+            genType = self.valMin.generic_type
+            x = Interval[genType](self.valMin.x, self.valMax.x).random()
+            y = Interval[genType](self.valMin.y, self.valMax.y).random()
+            return Vector[genType](x, y)
+        else:
+            raise TypeError
+    
+    @staticmethod
+    def debug():
+        print("Random Integer Vector Interval")
+        intVecInterval = Interval[Vector[int]](Vector[int](1, 2), Vector[int](10, 20))
+        for i in range(10):
+            print(f"\t{i}: {intVecInterval.random()=}")
+        print("Random Integer Vector Interval")
+        floatVecInterval = Interval[Vector[float]](Vector[float](1.0, 2.0), Vector[float](10.0, 20.0))
+        for i in range(10):
+            print(f"\t{i}: {floatVecInterval.random()=}")
+        
+        print(f"{dir(intVecInterval)=}")
+        print(f"{intVecInterval.__dict__=}")
+        hasToDict = {key: hasattr(val, 'to_dict') for key, val in intVecInterval.__dict__.items()}
+        print(f"Has to_dict: {hasToDict}")
+        print(f"{intVecInterval.to_dict()=}")
+
 
 class Artist:
     color: tuple[int, int, int] = (255, 255, 255)

@@ -4,10 +4,11 @@ import copy
 import inspect
 import json
 import os
+import types
+import typing
 from typing import Any, Callable, Generator, Generic, TypeVar
 import uuid
 import importlib
-
 import yaml
 
 class BaseUtil:
@@ -52,19 +53,56 @@ class BaseUtil:
                 obj_key.append((key, val))
         
         return tuple(obj_key)
+    
+    @staticmethod
+    def to_type_dict(val: Any | type | types.GenericAlias | typing._GenericAlias) -> dict[str, str]:
+        if type(val) is type:
+            typeDict = {
+                '_module': val.__module__,
+                '_qualname': val.__qualname__
+            }
+            if hasattr(val, '__orig_class__'):
+                typeDict['_orig_class'] = BaseUtil.to_type_dict(getattr(val, '__orig_class__'))
+            return typeDict
+        elif type(val) in [types.GenericAlias, typing._GenericAlias]:
+            return {
+                '_module': val.__module__,
+                '_qualname': val.__qualname__,
+                '_args': [BaseUtil.to_type_dict(arg) for arg in val.__args__]
+            }
+        elif type(val) is TypeVar:
+            return val.__name__
+        else:
+            if hasattr(val, '__orig_class__'):
+                typeDict = BaseUtil.to_type_dict(val.__orig_class__)
+                # typeDict['isOrigClass'] = True
+            else:
+                typeDict = BaseUtil.to_type_dict(type(val))
+                # typeDict['isOrigClass'] = False
+            return typeDict
+    
+    @staticmethod
+    def from_type_dict(type_dict: dict[str, str]) -> type | types.GenericAlias | typing._GenericAlias:
+        cls = getattr(
+            importlib.import_module(type_dict['_module']),
+            type_dict['_qualname']
+        )
+        if '_args' in type_dict:
+            args = tuple([BaseUtil.from_type_dict(arg_dict) for arg_dict in type_dict['_args']])
+            cls = cls[args]
+        return cls
 
 class Base:
     """Base Class
     Assume that all class variables are in the parameter list of __init__
     """
     def __init__(self):
-        self._module = type(self).__module__
-        self._qualname = type(self).__qualname__
+        pass
 
     def __str__(self) -> str:
         result = type(self).__name__
         result += "("
-        param_str_list = [f"{key}={val}" for key, val in self.__dict__.items() if key not in ['_module', '_qualname']]
+        param_str_list = [f"{key}={val}" for key, val in self.__dict__.items()]
         result += ', '.join(param_str_list)
         result += ")"
         return result
@@ -88,28 +126,43 @@ class Base:
         return [param for param in list(inspect.signature(cls.__init__).parameters.keys()) if param != 'self']
 
     def to_dict(self) -> dict:
-        return {
-            key: (
-                val if not hasattr(val, 'to_dict')
-                else val.to_dict()
-            )
-            for key, val in self.__dict__.items()
-        }
+        if not hasattr(self, '__orig_class__'):
+            item_dict = {
+                key: (
+                    val
+                    if not hasattr(val, 'to_dict')
+                    else val.to_dict()
+                )
+                for key, val in self.__dict__.items()
+            }
+            item_dict['_typedict'] = BaseUtil.to_type_dict(type(self))
+        else:
+            item_dict = {
+                key: (
+                    val
+                    if not hasattr(val, 'to_dict')
+                    else val.to_dict()
+                )
+                for key, val in self.__dict__.items()
+                if key != '__orig_class__'
+            }
+            item_dict['_typedict'] = BaseUtil.to_type_dict(self.__orig_class__)
+        return item_dict
     
     @classmethod
     def from_dict(cls, item_dict: dict):
-        assert '_module' in item_dict
-        assert '_qualname' in item_dict
-        loaded_cls = getattr(importlib.import_module(item_dict['_module']), item_dict['_qualname'])
-        assert cls is loaded_cls, f"{cls=} is not {loaded_cls=}"
+        assert '_typedict' in item_dict
+        loaded_cls = BaseUtil.from_type_dict(item_dict['_typedict'])
+        for attr in ['__module__', '__qualname__']:
+            assert getattr(cls, attr) == getattr(loaded_cls, attr), f"{cls.__name__}.{attr} != {loaded_cls.__name__}.{attr}"
         constructor_params = cls.get_constructor_params()
         constructor_dict = {}
         post_construction_dict = {}
         for key, val in item_dict.items():
-            if key in ['_module', '_qualname']:
+            if key == '_typedict':
                 continue
-            if type(val) is dict and '_module' in val and '_qualname' in val:
-                inner_cls = getattr(importlib.import_module(val['_module']), val['_qualname'])
+            if type(val) is dict and '_typedict' in val:
+                inner_cls = BaseUtil.from_type_dict(val['_typedict'])
                 assert hasattr(inner_cls, 'from_dict')
                 inner = inner_cls.from_dict(val)
                 if key in constructor_params:
@@ -122,8 +175,13 @@ class Base:
                 else:
                     post_construction_dict[key] = val
         obj = cls(**constructor_dict)
+        if '_typedict' in item_dict and '_args' in item_dict['_typedict'] and cls.__module__ != 'builtins':
+            obj.__dict__['__orig_class__'] = typing._GenericAlias(
+                cls,
+                tuple([BaseUtil.from_type_dict(arg_dict) for arg_dict in item_dict['_typedict']['_args']])
+            )
         for key, val in post_construction_dict.items():
-            assert hasattr(obj, key)
+            assert hasattr(obj, key), f"Object of type {type(obj).__name__} has no attribute '{key}'"
             setattr(obj, key, val)
         return obj
 
@@ -173,8 +231,6 @@ T = TypeVar('T', bound=Base) # T can only be Base or a subtype of Base
 
 class BaseHandler(Generic[T]):
     def __init__(self, _objects: list[T]=None):
-        self._module = type(self).__module__
-        self._qualname = type(self).__qualname__
         self._objects = _objects if _objects is not None else []
     
     def __str__(self) -> str:
@@ -302,44 +358,87 @@ class BaseHandler(Generic[T]):
     def get_constructor_params(cls) -> list[str]:
         return [param for param in list(inspect.signature(cls.__init__).parameters.keys()) if param != 'self']
 
-    def to_dict(self) -> dict:
-        item_dict = {}
+    def _to_dict_compressed(self) -> dict:
+        cls_typedict: dict = BaseUtil.to_type_dict(self)
+        obj_typedict: dict = BaseUtil.to_type_dict(self[0]) if len(self) > 0 else None
+        if '_args' in cls_typedict:
+            del cls_typedict['_args']
+
+        item_dict: dict = dict(cls_typedict=cls_typedict, obj_typedict=obj_typedict)
         for key, val in self.__dict__.items():
+            if key == '__orig_class__':
+                continue
             if key == '_objects':
-                item_dict[key] = [val0.to_dict() for val0 in val]
+                workingDictList: list[dict] = []
+                for val0 in val:
+                    workingDict = val0.to_dict()
+                    assert '_typedict' in workingDict
+                    del workingDict['_typedict']
+                    workingDictList.append(workingDict)
+                item_dict[key] = workingDictList
             elif hasattr(val, 'to_dict'):
                 item_dict[key] = val.to_dict()
             else:
                 item_dict[key] = val
         return item_dict
 
+    def _to_dict_expanded(self) -> dict:
+        cls_typedict: dict = BaseUtil.to_type_dict(self)
+        # obj_typedict: dict = BaseUtil.to_type_dict(self[0]) if len(self) > 0 else None
+        if '_args' in cls_typedict:
+            del cls_typedict['_args']
+
+        item_dict: dict = dict(_typedict=cls_typedict)
+        for key, val in self.__dict__.items():
+            if key == '__orig_class__':
+                continue
+            if key == '_objects':
+                workingDictList: list[dict] = []
+                for val0 in val:
+                    workingDict = val0.to_dict()
+                    assert '_typedict' in workingDict
+                    # del workingDict['_typedict']
+                    workingDictList.append(workingDict)
+                item_dict[key] = workingDictList
+            elif hasattr(val, 'to_dict'):
+                item_dict[key] = val.to_dict()
+            else:
+                item_dict[key] = val
+        return item_dict
+
+    def to_dict(self, compressed: bool=True) -> dict:
+        if compressed:
+            return self._to_dict_compressed()
+        else:
+            return self._to_dict_expanded()
+
     @classmethod
-    def from_dict(cls, item_dict: dict):
-        assert '_module' in item_dict
-        assert '_qualname' in item_dict
-        loaded_cls = getattr(importlib.import_module(item_dict['_module']), item_dict['_qualname'])
-        assert cls is loaded_cls, f"{cls=}, {loaded_cls=}"
+    def _from_dict_compressed(cls, item_dict: dict):
+        assert 'cls_typedict' in item_dict
+        assert 'obj_typedict' in item_dict
+        cls_typedict = item_dict['cls_typedict']
+        obj_typedict = item_dict['obj_typedict']
+        cls_type = BaseUtil.from_type_dict(cls_typedict)
+        obj_type = BaseUtil.from_type_dict(obj_typedict)
+
         constructor_params = cls.get_constructor_params()
         constructor_dict = {}
         post_construction_dict = {}
         for key, val in item_dict.items():
-            if key in ['_module', '_qualname']:
+            if key in ['cls_typedict', 'obj_typedict']:
                 continue
             if key == '_objects':
                 assert type(val) is list
                 if len(val) == 0:
                     constructor_dict[key] = val
                 else:
-                    sample = val[0]
-                    assert type(sample) is dict
-                    assert '_module' in sample
-                    assert '_qualname' in sample
-                    sample_cls = getattr(importlib.import_module(sample['_module']), sample['_qualname'])
-                    assert hasattr(sample_cls, 'from_dict')
-                    loaded_val = [sample_cls.from_dict(val0) for val0 in val]
+                    loaded_val: list = []
+                    for val0 in val:
+                        val0['_typedict'] = obj_typedict
+                        loaded_val.append(obj_type.from_dict(val0))
                     constructor_dict[key] = loaded_val
-            elif type(val) is dict and '_module' in val and '_qualname' in val:
-                inner_cls = getattr(importlib.import_module(val['_module']), val['_qualname'])
+            elif type(val) is dict and '_typedict' in val:
+                inner_cls = BaseUtil.from_type_dict(val['_typedict'])
                 assert hasattr(inner_cls, 'from_dict')
                 inner = inner_cls.from_dict(val)
                 if key in constructor_params:
@@ -352,10 +451,72 @@ class BaseHandler(Generic[T]):
                 else:
                     post_construction_dict[key] = val
         obj = cls(**constructor_dict)
+        
+        if '_typedict' in item_dict and '_args' in item_dict['_typedict'] and cls.__module__ != 'builtins':
+            obj.__dict__['__orig_class__'] = typing._GenericAlias(
+                cls,
+                # tuple([BaseUtil.from_type_dict(arg_dict) for arg_dict in item_dict['_typedict']['_args']])
+                (obj_type,)
+            )
+
         for key, val in post_construction_dict.items():
-            assert hasattr(obj, key)
+            assert hasattr(obj, key), f"{type(obj).__name__} has no attribute {key}"
             setattr(obj, key, val)
         return obj
+
+    @classmethod
+    def _from_dict_expanded(cls, item_dict: dict):
+        assert '_typedict' in item_dict
+
+        constructor_params = cls.get_constructor_params()
+        constructor_dict = {}
+        post_construction_dict = {}
+        for key, val in item_dict.items():
+            if key in ['_typedict']:
+                continue
+            if key == '_objects':
+                assert type(val) is list
+                if len(val) == 0:
+                    constructor_dict[key] = val
+                else:
+                    loaded_val: list = []
+                    for val0 in val:
+                        assert '_typedict' in val0
+                        obj_type = BaseUtil.from_type_dict(val0['_typedict'])
+                        loaded_val.append(obj_type.from_dict(val0))
+                    constructor_dict[key] = loaded_val
+            elif type(val) is dict and '_typedict' in val:
+                inner_cls = BaseUtil.from_type_dict(val['_typedict'])
+                assert hasattr(inner_cls, 'from_dict')
+                inner = inner_cls.from_dict(val)
+                if key in constructor_params:
+                    constructor_dict[key] = inner
+                else:
+                    post_construction_dict[key] = inner
+            else:
+                if key in constructor_params:
+                    constructor_dict[key] = val
+                else:
+                    post_construction_dict[key] = val
+        obj = cls(**constructor_dict)
+        
+        if '_typedict' in item_dict and '_args' in item_dict['_typedict'] and cls.__module__ != 'builtins':
+            obj.__dict__['__orig_class__'] = typing._GenericAlias(
+                cls,
+                tuple([BaseUtil.from_type_dict(arg_dict) for arg_dict in item_dict['_typedict']['_args']])
+            )
+
+        for key, val in post_construction_dict.items():
+            assert hasattr(obj, key), f"{type(obj).__name__} has no attribute {key}"
+            setattr(obj, key, val)
+        return obj
+
+    @classmethod
+    def from_dict(cls, item_dict: dict, compressed: bool=True):
+        if compressed:
+            return cls._from_dict_compressed(item_dict)
+        else:
+            return cls._from_dict_expanded(item_dict)
 
     def append(self, obj: T):
         self._objects.append(obj)
