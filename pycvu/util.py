@@ -6,7 +6,9 @@ from PIL import Image as pilImage, \
     ImageDraw as pilImageDraw, \
     ImageFont as pilImageFont
 import numpy as np
-from pyevu import Vector2
+
+from .color import Color
+from .vector import Vector
 
 __all__ = [
     "Util",
@@ -46,49 +48,120 @@ class Util:
     
     @staticmethod
     def bgr_to_rgb(color: tuple[int, int, int]) -> tuple[int, int ,int]:
+        if type(color) is Color:
+            return color
         return tuple(list(color)[::-1])
 
     @staticmethod
     def rgb_to_bgr(color: tuple[int, int, int]) -> tuple[int, int ,int]:
+        if type(color) is Color:
+            return color
         return tuple(list(color)[::-1])
+
+    @overload
+    @staticmethod
+    def cast_int(value: tuple[float, float]) -> tuple[int, int]: ...
+
+    @overload
+    @staticmethod
+    def cast_int(value: Vector) -> Vector: ...
+
+    @staticmethod
+    def cast_int(value: tuple | Vector | Color) -> tuple | Vector | Color:
+        if type(value) is tuple:
+            return tuple([int(val) for val in value])
+        elif type(value) is Vector:
+            return Vector(int(value.x), int(value.y))
+        elif type(value) is Color:
+            result = value.copy()
+            for attr in ['r', 'g', 'b']:
+                setattr(result, attr, int(getattr(result, attr)))
+            return result
+        else:
+            raise TypeError(f"Unsupported type: {type(value).__name__}")
 
 class CvUtil:
     @staticmethod
     def circle(
-        img: np.ndarray, center: tuple[int, int], radius: int,
-        color: tuple[int, int, int], thickness: int, lineType: int
+        img: np.ndarray,
+        center: tuple[int, int] | Vector,
+        radius: int,
+        color: tuple[int, int, int] | Color,
+        thickness: int, lineType: int
     ) -> np.ndarray:
+        if type(center) is Vector:
+            center = tuple(center)
+        if type(color) is Color:
+            color = color.bgr
+        center = Util.cast_int(center)
         return cv2.circle(img, center, radius, color, thickness, lineType)
     
     @staticmethod
     def ellipse(
-        img: np.ndarray, center: tuple[int, int], axis: tuple[int, int],
+        img: np.ndarray,
+        center: tuple[int, int] | Vector,
+        axis: tuple[int, int] | Vector,
         angle: float, startAngle: float, endAngle: float,
-        color: tuple[int, int, int], thickness: int, lineType: int
+        color: tuple[int, int, int] | Color,
+        thickness: int, lineType: int
     ):
+        if type(center) is Vector:
+            center = tuple(center)
+        center = Util.cast_int(center)
+        if type(axis) is Vector:
+            axis = tuple(axis)
+        axis = Util.cast_int(axis)
+        if type(color) is Color:
+            color = color.bgr
         return cv2.ellipse(img, center, axis, angle, startAngle, endAngle, color, thickness, lineType)
 
     @staticmethod
     def rectangle(
-        img: np.ndarray, pt1: tuple[int, int], pt2: tuple[int, int],
-        color: tuple[int, int, int], thickness: int, lineType: int
+        img: np.ndarray,
+        pt1: tuple[int, int] | Vector,
+        pt2: tuple[int, int] | Vector,
+        color: tuple[int, int, int] | Color,
+        thickness: int, lineType: int
     ) -> np.ndarray:
+        if type(pt1) is Vector:
+            pt1 = tuple(pt1)
+        pt1 = Util.cast_int(pt1)
+        if type(pt2) is Vector:
+            pt2 = tuple(pt2)
+        pt2 = Util.cast_int(pt2)
+        if type(color) is Color:
+            color = color.bgr
         return cv2.rectangle(img, pt1, pt2, color, thickness, lineType)
 
     @staticmethod
     def line(
-        img: np.ndarray, pt1: tuple[int, int], pt2: tuple[int, int],
-        color: tuple[int, int, int], thickness: int, lineType: int
+        img: np.ndarray,
+        pt1: tuple[int, int] | Vector,
+        pt2: tuple[int, int] | Vector,
+        color: tuple[int, int, int] | Color,
+        thickness: int, lineType: int
     ) -> np.ndarray:
+        if type(pt1) is Vector:
+            pt1 = tuple(pt1)
+        pt1 = Util.cast_int(pt1)
+        if type(pt2) is Vector:
+            pt2 = tuple(pt2)
+        pt2 = Util.cast_int(pt2)
+        if type(color) is Color:
+            color = color.bgr
         return cv2.line(img, pt1, pt2, color, thickness, lineType)
     
     @staticmethod
     def affine_rotate(
         img: np.ndarray, angle: float, degrees: bool=True,
         scale: float=1, interpolation: int=cv2.INTER_LINEAR,
-        adjustBorder: bool=False, center: tuple[int, int]=None,
-        borderColor: tuple[int, int, int]=[255, 255, 255],
+        adjustBorder: bool=False,
+        center: tuple[int, int] | Vector=None,
+        borderColor: tuple[int, int, int] | Color=[255, 255, 255],
     ) -> np.ndarray:
+        if center is not None and type(center) is Vector:
+            center = tuple(center)
+
         h, w = img.shape[:2]
         if degrees:
             angle = math.radians(angle)
@@ -104,14 +177,22 @@ class CvUtil:
         if adjustBorder:
             affineMatrix[0][2] = affineMatrix[0][2] - w/2 + wRot/2
             affineMatrix[1][2] = affineMatrix[1][2] - h/2 + hRot/2
+        if type(borderColor) is Color:
+            borderColor = borderColor.bgr
         return cv2.warpAffine(img, affineMatrix, sizeRotation, flags=interpolation, borderValue=borderColor)
     
     def text(
-        img: np.ndarray, text: str, org: tuple[int, int],
+        img: np.ndarray, text: str,
+        org: tuple[int, int] | Vector,
         fontFace: int=cv2.FONT_HERSHEY_SIMPLEX, fontScale: float=1,
-        color: tuple[int, int, int] = (255, 255, 255),
+        color: tuple[int, int, int] | Color = (255, 255, 255),
         thickness: int=None, lineType: int=None, bottomLeftOrigin: bool=False
     ) -> np.ndarray:
+        if type(org) is Vector:
+            org = tuple(org)
+        org = Util.cast_int(org)
+        if type(color) is Color:
+            color = color.bgr
         return cv2.putText(
             img, text, org, fontFace, fontScale, color, thickness, lineType, bottomLeftOrigin
         )
@@ -125,37 +206,31 @@ class CvUtil:
 
     @staticmethod
     def resize(
-        src: np.ndarray, dsize: tuple[int, int]=None,
+        src: np.ndarray,
+        dsize: tuple[int, int] | Vector=None,
         fx: float=None, fy: float=None, interpolation: int=None
     ) -> np.ndarray:
+        if dsize is not None:
+            if type(dsize) is Vector:
+                dsize = tuple(Vector)
+            dsize = Util.cast_int(dsize)
         return cv2.resize(src, dsize=dsize, fx=fx, fy=fy, interpolation=interpolation)
-
-    @overload
-    @staticmethod
-    def cast_int(value: tuple[float, float]) -> tuple[int, int]: ...
-
-    @overload
-    @staticmethod
-    def cast_int(value: Vector2) -> Vector2: ...
-
-    @staticmethod
-    def cast_int(value: tuple[float, float] | Vector2) -> tuple[int, int] | Vector2:
-        if type(value) is tuple:
-            return (int(value[0]), int(value[1]))
-        elif type(value) is Vector2:
-            return Vector2(int(value.x), int(value.y))
-        else:
-            raise TypeError
 
 class PilUtil:
     @staticmethod
     def text(
         img: pilImage.Image, text: str,
-        fontPath: str, fontSize: int, color: tuple[int, int, int],
-        position: tuple[float, float],
+        fontPath: str, fontSize: int,
+        color: tuple[int, int, int] | Color,
+        position: tuple[float, float] | Vector,
         align: Literal['left', 'center', 'right']='left',
         direction: Literal['rtl', 'ltr', 'ttb']='ltr'
     ) -> pilImage.Image:
+        if type(position) is Vector:
+            position = tuple(position)
+        if type(color) is Color:
+            color = Util.cast_int(color.rgb)
+
         draw = pilImageDraw.Draw(img, mode=None)
         font = pilImageFont.truetype(font=fontPath, size=fontSize)
         w, h = draw.textsize(text, font=font, direction=direction)
@@ -174,9 +249,15 @@ class PilUtil:
     @staticmethod
     def ellipse(
         img: pilImage.Image, center: tuple[float, float], axis: tuple[float, float],
-        fillColor: tuple[int, int, int]=None, outlineColor: tuple[int, int, int]=None,
+        fillColor: tuple[int, int, int] | Color=None,
+        outlineColor: tuple[int, int, int] | Color=None,
         outlineWidth: float=None
     ) -> pilImage.Image:
+        if type(fillColor) is Color:
+            fillColor = Util.cast_int(fillColor.rgb)
+        if type(outlineColor) is Color:
+            outlineColor = Util.cast_int(outlineColor.rgb)
+
         p0 = (center[0] - axis[0], center[1] - axis[1])
         p1 = (center[0] + axis[0], center[1] + axis[1])
         shape: list[float] = list(p0) + list(p1)
@@ -187,7 +268,8 @@ class PilUtil:
     @staticmethod
     def circle(
         img: pilImage.Image, center: tuple[float, float], radius: float,
-        fillColor: tuple[int, int, int]=None, outlineColor: tuple[int, int, int]=None,
+        fillColor: tuple[int, int, int] | Color=None,
+        outlineColor: tuple[int, int, int] | Color=None,
         outlineWidth: float=None
     ) -> pilImage.Image:
         return PilUtil.ellipse(
@@ -201,11 +283,16 @@ class PilUtil:
         img: pilImage.Image, text: str,
         fontPath: str, fontSize: int,
         color: tuple[int, int, int],
-        position: tuple[float, float],
+        position: tuple[float, float] | Vector,
         direction: Literal['rtl', 'ltr', 'ttb']='ttb',
         outlineWidth: float=20,
         marginOffset: float = 0, marginRatio: float = 0
     ):
+        if type(position) is Vector:
+            position = tuple(position)
+        if type(color) is Color:
+            color = Util.cast_int(color.rgb)
+
         draw = pilImageDraw.Draw(img, mode=None)
         font = pilImageFont.truetype(font=fontPath, size=fontSize)
         w, h = draw.textsize(text, font=font, direction=direction)

@@ -1,7 +1,7 @@
 from __future__ import annotations
 from functools import partial
 from typing import TYPE_CHECKING
-from pyevu import Vector2
+from ..vector import Vector
 import pycvu
 
 from ..util import Util, PilUtil
@@ -42,7 +42,8 @@ class PilArtist:
 
     @_pillow_decorator
     def text(
-        self, text: str, position: tuple[float, float] | Vector2
+        self, text: str,
+        position: tuple[float, float] | Vector
     ) -> Artist:
         """Draws text on the image.
 
@@ -50,8 +51,6 @@ class PilArtist:
             text (str): The text that you would like to draw.
             position (tuple[float, float]): Where you would like to draw the text.
         """
-        if type(position) is Vector2:
-            position = tuple(position)
         self._artist._drawQueue.append(
             partial(
                 PilUtil.text,
@@ -66,10 +65,8 @@ class PilArtist:
     
     @_pillow_decorator
     def hanko(
-        self, text: str, position: tuple[float, float] | Vector2
+        self, text: str, position: tuple[float, float] | Vector
     ) -> Artist:
-        if type(position) is Vector2:
-            position = tuple(position)
         self._artist._drawQueue.append(
             partial(
                 PilUtil.hanko,
