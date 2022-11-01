@@ -102,7 +102,7 @@ class Base:
     def __str__(self) -> str:
         result = type(self).__name__
         result += "("
-        param_str_list = [f"{key}={val}" for key, val in self.__dict__.items()]
+        param_str_list = [f"{key}={val}" for key, val in self.__dict__.items() if key != "__orig_class__"]
         result += ', '.join(param_str_list)
         result += ")"
         return result
@@ -125,7 +125,7 @@ class Base:
     def get_constructor_params(cls) -> list[str]:
         return [param for param in list(inspect.signature(cls.__init__).parameters.keys()) if param != 'self']
 
-    def to_dict(self) -> dict:
+    def to_dict(self, **kwargs) -> dict:
         if not hasattr(self, '__orig_class__'):
             item_dict = {
                 key: (
@@ -150,7 +150,7 @@ class Base:
         return item_dict
     
     @classmethod
-    def from_dict(cls, item_dict: dict):
+    def from_dict(cls, item_dict: dict, **kwargs):
         assert '_typedict' in item_dict
         loaded_cls = BaseUtil.from_type_dict(item_dict['_typedict'])
         for attr in ['__module__', '__qualname__']:
@@ -185,22 +185,22 @@ class Base:
             setattr(obj, key, val)
         return obj
 
-    def save(self, path: str):
+    def save(self, path: str, **kwargs):
         ext = os.path.splitext(path)[1]
         if ext == '.json':
-            json.dump(self.to_dict(), open(path, 'w'), ensure_ascii=False, sort_keys=False)
+            json.dump(self.to_dict(**kwargs), open(path, 'w'), ensure_ascii=False, sort_keys=False)
         elif ext == '.yaml':
-            yaml.dump(self.to_dict(), open(path, 'w'), allow_unicode=True, sort_keys=False)
+            yaml.dump(self.to_dict(**kwargs), open(path, 'w'), allow_unicode=True, sort_keys=False)
         else:
             raise Exception(f"Invalid file extension: {ext}")
     
     @classmethod
-    def load(cls, path: str):
+    def load(cls, path: str, **kwargs):
         ext = os.path.splitext(path)[1]
         if ext == '.json':
-            return cls.from_dict(json.load(open(path, 'r')))
+            return cls.from_dict(json.load(open(path, 'r')), **kwargs)
         elif ext == '.yaml':
-            return cls.from_dict(yaml.load(open(path, 'r'), Loader=yaml.FullLoader))
+            return cls.from_dict(yaml.load(open(path, 'r'), Loader=yaml.FullLoader), **kwargs)
         else:
             raise Exception(f"Invalid file extension: {ext}")
 
@@ -406,7 +406,7 @@ class BaseHandler(Generic[T]):
                 item_dict[key] = val
         return item_dict
 
-    def to_dict(self, compressed: bool=True) -> dict:
+    def to_dict(self, compressed: bool=True, **kwargs) -> dict:
         if compressed:
             return self._to_dict_compressed()
         else:
@@ -512,7 +512,7 @@ class BaseHandler(Generic[T]):
         return obj
 
     @classmethod
-    def from_dict(cls, item_dict: dict, compressed: bool=True):
+    def from_dict(cls, item_dict: dict, compressed: bool=True, **kwargs):
         if compressed:
             return cls._from_dict_compressed(item_dict)
         else:
@@ -554,22 +554,22 @@ class BaseHandler(Generic[T]):
         else:
             raise ValueError("Must provide parameters.")
 
-    def save(self, path: str):
+    def save(self, path: str, **kwargs):
         ext = os.path.splitext(path)[1]
         if ext == '.json':
-            json.dump(self.to_dict(), open(path, 'w'), ensure_ascii=False, sort_keys=False)
+            json.dump(self.to_dict(**kwargs), open(path, 'w'), ensure_ascii=False, sort_keys=False)
         elif ext == '.yaml':
-            yaml.dump(self.to_dict(), open(path, 'w'), allow_unicode=True, sort_keys=False)
+            yaml.dump(self.to_dict(**kwargs), open(path, 'w'), allow_unicode=True, sort_keys=False)
         else:
             raise Exception(f"Invalid file extension: {ext}")
     
     @classmethod
-    def load(cls, path: str):
+    def load(cls, path: str, **kwargs):
         ext = os.path.splitext(path)[1]
         if ext == '.json':
-            return cls.from_dict(json.load(open(path, 'r')))
+            return cls.from_dict(json.load(open(path, 'r')), **kwargs)
         elif ext == '.yaml':
-            return cls.from_dict(yaml.load(open(path, 'r'), Loader=yaml.FullLoader))
+            return cls.from_dict(yaml.load(open(path, 'r'), Loader=yaml.FullLoader), **kwargs)
         else:
             raise Exception(f"Invalid file extension: {ext}")
 
@@ -578,15 +578,15 @@ class BaseObject(Base):
         super().__init__()
         self.id = uuid.uuid4()
     
-    def to_dict(self) -> dict:
-        item_dict = super().to_dict()
+    def to_dict(self, **kwargs) -> dict:
+        item_dict = super().to_dict(**kwargs)
         item_dict['id'] = item_dict['id'].hex
         return item_dict
     
     @classmethod
-    def from_dict(cls, item_dict: dict):
+    def from_dict(cls, item_dict: dict, **kwargs):
         item_dict['id'] = uuid.UUID(item_dict['id'])
-        return super().from_dict(item_dict)
+        return super().from_dict(item_dict, **kwargs)
 
 OBJ = TypeVar('OBJ', bound=BaseObject)
 
@@ -595,15 +595,15 @@ class BaseObjectHandler(BaseHandler[OBJ]):
         super().__init__(_objects)
         self.id = uuid.uuid4()
 
-    def to_dict(self) -> dict:
-        item_dict = super().to_dict()
+    def to_dict(self, **kwargs) -> dict:
+        item_dict = super().to_dict(**kwargs)
         item_dict['id'] = item_dict['id'].hex
         return item_dict
     
     @classmethod
-    def from_dict(cls, item_dict: dict):
+    def from_dict(cls, item_dict: dict, **kwargs):
         item_dict['id'] = uuid.UUID(item_dict['id'])
-        return super().from_dict(item_dict)
+        return super().from_dict(item_dict, **kwargs)
 
 class InnerDummyObj(BaseObject):
     def __init__(self, name: str='Name', count: int=0):

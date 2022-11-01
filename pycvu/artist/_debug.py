@@ -78,7 +78,20 @@ def debug(cls: Type[Artist]):
     cls.PIL.hankoMarginRatio = 0.1
     drawer.pil.hanko(text="合格", position=(300, 300+200))
 
+    # print(f"{[type(callback) for callback in drawer._drawQueue]}")
+    # import functools
+    # p: functools.partial = drawer._drawQueue[0]
+    
+    # print("dir(p)")
+    # for key in dir(p):
+    #     print(f"\tgetattr(p, {key}): {getattr(p, key)}")
+
+    drawer.save('/tmp/artistDebugSave.json', saveImg=False, saveMeta=True)
+    del drawer
+    drawer = cls.load('/tmp/artistDebugSave.json', img=img, loadMeta=True) # Make sure save and load works.
+
     result = drawer.draw()
+
     cv2.imshow('debug', result)
     cv2.waitKey(3000)
     cv2.destroyAllWindows()

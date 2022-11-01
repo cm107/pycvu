@@ -17,10 +17,15 @@ class Vector(Vector2, Base, Generic[T]):
         Base.__init__(self)
     
     def __str__(self) -> str:
-        return f"{type(self).__name__}[{self.generic_type.__name__}]({','.join([f'{key}={val}' for key, val in self.__dict__.items() if key != '__orig_class__'])})"
+        cls_str = f"{type(self).__name__}[{self.generic_type.__name__}]" if hasattr(self, '__orig_class__') else f"{type(self).__name__}"
+        return f"{cls_str}({','.join([f'{key}={val}' for key, val in self.__dict__.items() if key != '__orig_class__'])})"
 
     @property
-    def generic_type(self) -> type: # Note: Can't be called from __init__ or any other dunder method.
+    def generic_type(self) -> type:
+        # Note: Can't be called from __init__ or any other dunder method.
+        # Also cannot be called from any classmethod.
+        # When instance is created with cls() in a classmethod, __orig_class__ doesn't seem to be initialized properly.
+        # Avoid using Vector[int].zero, Vector[int].one, and so on when the generic type needs to be checked.
         return self.__orig_class__.__args__[0]
 
     @staticmethod
