@@ -1,4 +1,5 @@
 from __future__ import annotations
+from functools import partial
 import sys
 import copy
 import inspect
@@ -91,6 +92,59 @@ class BaseUtil:
             args = tuple([BaseUtil.from_type_dict(arg_dict) for arg_dict in type_dict['_args']])
             cls = cls[args]
         return cls
+
+    @staticmethod
+    def to_func_dict(func: Callable | partial) -> dict:
+        assert callable(func)
+        if type(func) is partial:
+            keywordsDict: dict = dict()
+            for key, val in func.keywords.items():
+                if hasattr(val, 'to_dict'):
+                    keywordsDict[key] = val.to_dict()
+                elif callable(val): # Could be a callback function.
+                    keywordsDict[key] = BaseUtil.to_func_dict(val)
+                else:
+                    keywordsDict[key] = val
+            return dict(
+                _funcModule=func.func.__module__,
+                _funcQualname=func.func.__qualname__,
+                _keywords=keywordsDict
+            )
+        else:
+            return dict(
+                _funcModule=func.__module__,
+                _funcQualname=func.__qualname__
+            )
+    
+    @staticmethod
+    def from_func_dict(func_dict: dict) -> Callable | partial:
+        module = importlib.import_module(func_dict['_funcModule'])
+        attrSequence = func_dict['_funcQualname'].split('.')
+        attr = getattr(module, attrSequence[0])
+        for attr0 in attrSequence[1:]:
+            attr = getattr(attr, attr0)
+        assert callable(attr)
+        func = attr
+        if '_keywords' in func_dict:
+            keywords: dict = {}
+            for key, val in func_dict['_keywords'].items():
+                if type(val) is dict and '_funcModule' in val:
+                    keywords[key] = BaseUtil.from_func_dict(val)
+                elif type(val) is dict:
+                    assert '_typedict' in val
+                    objCls = BaseUtil.from_type_dict(val['_typedict'])
+                    if hasattr(objCls, 'from_dict'):
+                        obj = objCls.from_dict(val)
+                    else:
+                        obj = objCls(**{key0: val0 for key0, val0 in val.items() if key0 != '_typedict'})
+                    keywords[key] = obj
+                else:
+                    if type(val) is list:
+                        val = tuple(val) # Seems like opencv's functions need tuples instead of lists.
+                    keywords[key] = val
+            return partial(func, **keywords)
+        else:
+            return func
 
 class Base:
     """Base Class

@@ -1,9 +1,11 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING, Type
+from typing import TYPE_CHECKING, Callable, Type
 import cv2
 import numpy as np
+
+from pycvu.util import CvUtil, PilUtil
 from ..vector import Vector
-from ..color import Color
+from ..color import Color, HSV
 from ..interval import Interval
 if TYPE_CHECKING:
     from ._artist import Artist
@@ -78,13 +80,29 @@ def debug(cls: Type[Artist]):
     cls.PIL.hankoMarginRatio = 0.1
     drawer.pil.hanko(text="合格", position=(300, 300+200))
 
-    # print(f"{[type(callback) for callback in drawer._drawQueue]}")
-    # import functools
-    # p: functools.partial = drawer._drawQueue[0]
+    cls.color = Interval[HSV](HSV(0, 0.9375, 0.5), HSV(359.9, 1.0, 1.0))
+    positionCallback = CvUtil.Callback.get_position_interval
     
-    # print("dir(p)")
-    # for key in dir(p):
-    #     print(f"\tgetattr(p, {key}): {getattr(p, key)}")
+    for i in range(10):
+        drawer.line(pt1=positionCallback, pt2=positionCallback)
+        drawer.rectangle(pt1=positionCallback, pt2=positionCallback, fill=False)
+        drawer.ellipse(
+            center=positionCallback,
+            axis=Interval[Vector[float]](Vector[float](5, 5), Vector[float](100, 100)),
+            angle=Interval[float](0, 180),
+            startAngle=Interval[float](0, 360),
+            endAngle=Interval[float](0, 360),
+            fill=False
+        )
+        drawer.circle(
+            center=positionCallback,
+            radius=Interval[int](5, 100),
+            fill=True
+        )
+        cls.PIL.fontSize = Interval[int](5, 40)
+        cls.PIL.hankoOutlineWidth = Interval[int](1, 5)
+        cls.PIL.hankoMarginRatio = Interval[float](0.1, 0.5)
+        drawer.pil.hanko(text='合格', position=PilUtil.Callback.get_position_interval)
 
     drawer.save('/tmp/artistDebugSave.json', saveImg=False, saveMeta=True)
     del drawer

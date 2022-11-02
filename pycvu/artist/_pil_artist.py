@@ -1,10 +1,14 @@
 from __future__ import annotations
 from functools import partial
 from typing import TYPE_CHECKING
+
+from pycvu.interval import Interval
 from ..vector import Vector
 import pycvu
 
-from ..util import Util, PilUtil
+from ..util import Util, PilUtil, \
+    VectorVar, PilImageVectorCallback, \
+    IntVar, FloatVar
 if TYPE_CHECKING:
     from ._artist import Artist
 
@@ -13,16 +17,16 @@ __all__ = [
 ]
 
 class PilArtist:
-    fontSize: int = 30
+    fontSize: IntVar = 30
     """Size of the font when drawing text."""
 
     fontPath: str = f"{pycvu.__path__[0]}/data/font/ipaexg.ttf"
     """Path to the font used when drawing text."""
 
     hankoIsVertical: bool = True
-    hankoOutlineWidth: float = 20
-    hankoMarginOffset: float = 0
-    hankoMarginRatio: float = 0
+    hankoOutlineWidth: IntVar = 20
+    hankoMarginOffset: FloatVar = 0
+    hankoMarginRatio: FloatVar = 0
 
     def __init__(self, artist: Artist):
         self._artist = artist
@@ -43,7 +47,7 @@ class PilArtist:
     @_pillow_decorator
     def text(
         self, text: str,
-        position: tuple[float, float] | Vector
+        position: VectorVar | PilImageVectorCallback
     ) -> Artist:
         """Draws text on the image.
 
@@ -65,14 +69,14 @@ class PilArtist:
     
     @_pillow_decorator
     def hanko(
-        self, text: str, position: tuple[float, float] | Vector
+        self, text: str, position: VectorVar | PilImageVectorCallback
     ) -> Artist:
         self._artist._drawQueue.append(
             partial(
                 PilUtil.hanko,
                 text=text,
                 fontPath=PilArtist.fontPath, fontSize=PilArtist.fontSize,
-                color=self._artist.color,
+                color=Util.bgr_to_rgb(self._artist.color),
                 position=position,
                 direction='ttb' if PilArtist.hankoIsVertical else 'ltr',
                 outlineWidth=PilArtist.hankoOutlineWidth,

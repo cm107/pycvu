@@ -3,23 +3,27 @@ import random
 from typing import Generic, TypeVar
 from .base import Base
 from .vector import Vector
-from .color import Color
+from .color import Color, HSV
 
 __all__ = [
     "Interval"
 ]
 
 T = TypeVar('T', int, float)
-TV = TypeVar('TV', int, float, Vector, Color)
+TV = TypeVar('TV', int, float, Vector, Color, HSV)
 
 class Interval(Base, Generic[TV]):
     def __init__(self, valMin: TV, valMax: TV):
         super().__init__()
-        assert type(valMin) is type(valMax)
+        if type(valMin) is float and type(valMax) is int:
+            valMax = float(valMax)
+        elif type(valMin) is int and type(valMax) is float:
+            valMin = float(valMin)
+        assert type(valMin) is type(valMax), f"{type(valMin)=} is not {type(valMax)=}"
         assert type(valMin) in TV.__constraints__, f"{type(valMin).__name__} isn't in constraints."
         if type(valMin) in T.__constraints__:
             assert valMin <= valMax
-        elif type(valMin) in [Vector, Color]:
+        elif type(valMin) in [Vector, Color, HSV]:
             assert type(valMin) is type(valMax)
             if type(valMin) is Vector:
                 assert valMin.generic_type is valMax.generic_type
@@ -28,6 +32,11 @@ class Interval(Base, Generic[TV]):
                 assert valMin.scale == valMax.scale
                 for attr in ['r', 'g', 'b', 'a']:
                     assert getattr(valMin, attr) <= getattr(valMax, attr)
+            elif type(valMin) is HSV:
+                for attr in ['h', 's', 'v']:
+                    assert getattr(valMin, attr) <= getattr(valMax, attr)
+            else:
+                raise Exception
         else:
             raise TypeError
 
@@ -40,15 +49,21 @@ class Interval(Base, Generic[TV]):
 
     def to_dict(self) -> dict:
         item_dict = super().to_dict()
+        _boundTypeOmitted = False
         for key in ['valMin', 'valMax']:
-            assert item_dict[key]['_typedict'] == item_dict['_typedict']['_args'][0]
-            del item_dict[key]['_typedict'] # Same generic type, so we can omit this redundant type info.
+            if type(item_dict[key]) is dict and '_typedict' in item_dict[key]:
+                assert item_dict[key]['_typedict'] == item_dict['_typedict']['_args'][0]
+                del item_dict[key]['_typedict'] # Same generic type, so we can omit this redundant type info.
+                _boundTypeOmitted = True
+        item_dict['_boundTypeOmitted'] = _boundTypeOmitted
         return item_dict
 
     @classmethod
     def from_dict(cls, item_dict: dict):
-        for key in ['valMin', 'valMax']:
-            item_dict[key]['_typedict'] = item_dict['_typedict']['_args'][0] # Bring the omitted type info back.
+        if item_dict['_boundTypeOmitted']:
+            for key in ['valMin', 'valMax']:
+                item_dict[key]['_typedict'] = item_dict['_typedict']['_args'][0] # Bring the omitted type info back.
+        del item_dict['_boundTypeOmitted']
         return super().from_dict(item_dict)
 
     def random(self) -> TV:
@@ -68,6 +83,11 @@ class Interval(Base, Generic[TV]):
             b = Interval[float](self.valMin.b, self.valMax.b).random()
             a = Interval[float](self.valMin.a, self.valMax.a).random()
             return Color(r, g, b, a, self.valMin.scale)
+        elif self.generic_type is HSV:
+            h = Interval[float](self.valMin.h, self.valMax.h).random()
+            s = Interval[float](self.valMin.s, self.valMax.s).random()
+            v = Interval[float](self.valMin.v, self.valMax.v).random()
+            return HSV(h, s, v)
         else:
             raise TypeError
     

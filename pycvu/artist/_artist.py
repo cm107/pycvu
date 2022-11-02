@@ -10,7 +10,9 @@ from pycvu.base import BaseUtil, Base
 
 from ..color import Color
 from ..vector import Vector
-from ..util import CvUtil
+from ..util import CvUtil, \
+    VectorVar, ImageVectorCallback, ColorVar, \
+    IntVar, FloatVar
 
 __all__ = [
     "Artist"
@@ -27,10 +29,10 @@ from ..vector import Vector
 
 
 class Artist(Base):
-    color: tuple[int, int, int] = Color(255, 255, 255)
+    color: ColorVar = Color(255, 255, 255)
     """Color used when drawing anything."""
 
-    thickness: int = 1
+    thickness: IntVar = 1
     """Line thickness used when drawing non-solid shapes."""
 
     lineType: int = cv2.LINE_AA
@@ -45,7 +47,7 @@ class Artist(Base):
     fontFace: int = cv2.FONT_HERSHEY_COMPLEX
     """Font face usedd when drawing text."""
     
-    fontScale: float = 1.0
+    fontScale: FloatVar = 1.0
     """Font scale used when drawing text."""
 
     from ._pil_artist import PilArtist as PIL
@@ -107,7 +109,10 @@ class Artist(Base):
                 assert hasattr(metaObjCls, key)
                 if type(val) is dict and '_typedict' in val:
                     objCls = BaseUtil.from_type_dict(val['_typedict'])
-                    obj = objCls(**{key0: val0 for key0, val0 in val.items() if key0 != '_typedict'})
+                    if hasattr(objCls, 'from_dict'):
+                        obj = objCls.from_dict(val)
+                    else:
+                        obj = objCls(**{key0: val0 for key0, val0 in val.items() if key0 != '_typedict'})
                     setattr(metaObjCls, key, obj)
                 else:
                     setattr(metaObjCls, key, val)
@@ -126,7 +131,10 @@ class Artist(Base):
     def load(cls, path: str, img: np.ndarray=None, loadMeta: bool=True) -> Artist:
         return super().load(path, img=img, loadMeta=loadMeta)
 
-    def circle(self, center: tuple[int, int] | Vector, radius: int, fill: bool=False) -> Artist:
+    def circle(
+        self, center: VectorVar | ImageVectorCallback,
+        radius: IntVar, fill: bool=False
+    ) -> Artist:
         """Draws a circle.
 
         Args:
@@ -146,9 +154,11 @@ class Artist(Base):
         return self
     
     def ellipse(
-        self, center: tuple[int, int] | Vector,
-        axis: tuple[int, int] | Vector,
-        angle: float=0, startAngle: float=0, endAngle: float=360,
+        self, center: VectorVar | ImageVectorCallback,
+        axis: VectorVar,
+        angle: FloatVar=0,
+        startAngle: FloatVar=0,
+        endAngle: FloatVar=360,
         fill: bool=False
     ) -> Artist:
         """Draws an ellipse.
@@ -174,8 +184,8 @@ class Artist(Base):
 
     def rectangle(
         self,
-        pt1: tuple[int, int] | Vector,
-        pt2: tuple[int, int] | Vector,
+        pt1: VectorVar | ImageVectorCallback,
+        pt2: VectorVar | ImageVectorCallback,
         fill: bool=False
     ) -> Artist:
         """Draws a rectangle.
@@ -198,8 +208,8 @@ class Artist(Base):
     
     def line(
         self,
-        pt1: tuple[int, int] | Vector,
-        pt2: tuple[int, int] | Vector
+        pt1: VectorVar | ImageVectorCallback,
+        pt2: VectorVar | ImageVectorCallback
     ) -> Artist:
         """Draws a line.
 
@@ -219,9 +229,11 @@ class Artist(Base):
         return self
     
     def affine_rotate(
-        self, angle: float, degrees: bool=True,
-        scale: float=1, adjustBorder: bool=False,
-        center: tuple[int, int] | Vector=None
+        self, angle: FloatVar,
+        degrees: bool=True,
+        scale: FloatVar=1,
+        adjustBorder: bool=False,
+        center: VectorVar=None
     ) -> Artist:
         """This rotates the image about the axis coming out of the screen.
 
@@ -251,7 +263,8 @@ class Artist(Base):
         return self
 
     def text(
-        self, text: str, org: tuple[int, int] | Vector,
+        self, text: str,
+        org: VectorVar,
         bottomLeftOrigin: bool=False
     ) -> Artist:
         """Draws text on the image.
@@ -277,7 +290,7 @@ class Artist(Base):
         )
 
     @overload
-    def resize(self, dsize: tuple[int, int] | Vector) -> Artist:
+    def resize(self, dsize: VectorVar) -> Artist:
         """Resizes the working image to the given target size.
 
         Args:
@@ -286,7 +299,7 @@ class Artist(Base):
         ...
 
     @overload
-    def resize(self, fx: float=None, fy: float=None) -> Artist:
+    def resize(self, fx: FloatVar=None, fy: FloatVar=None) -> Artist:
         """Resizes the working image according to the given scaling factors.
         Scaling factors are relative to the current working image size.
 
@@ -297,8 +310,8 @@ class Artist(Base):
         ...
 
     def resize(
-        self, dsize: tuple[int, int] | Vector=None,
-        fx: float=None, fy: float=None
+        self, dsize: VectorVar=None,
+        fx: FloatVar=None, fy: FloatVar=None
     ) -> Artist:
         self._drawQueue.append(
             partial(
@@ -325,39 +338,13 @@ class Artist(Base):
     def _serialize_queue(self) -> list[dict]:
         result: list[dict] = []
         for p in self._drawQueue:
-            keywordsDict: dict = dict()
-            for key, val in p.keywords.items():
-                keywordsDict[key] = val.to_dict() if hasattr(val, 'to_dict') else val
-            pDict: dict = dict(
-                _funcModule=p.func.__module__,
-                _funcQualname=p.func.__qualname__,
-                keywords=keywordsDict
-            )
-            result.append(pDict)
+            result.append(BaseUtil.to_func_dict(p))
         return result
 
     def _unserialize_queue(self, serializedQueue: list[dict]) -> list[Callable[[np.ndarray], np.ndarray]]:
         queue: list[Callable[[np.ndarray], np.ndarray]] = []
         for pDict in serializedQueue:
-            module = importlib.import_module(pDict['_funcModule'])
-            attrSequence = pDict['_funcQualname'].split('.')
-            attr = getattr(module, attrSequence[0])
-            for attr0 in attrSequence[1:]:
-                attr = getattr(attr, attr0)
-            assert callable(attr)
-            func = attr
-            keywords: dict = {}
-            for key, val in pDict['keywords'].items():
-                if type(val) is dict:
-                    assert '_typedict' in val
-                    objCls = BaseUtil.from_type_dict(val['_typedict'])
-                    obj = objCls(**{key0: val0 for key0, val0 in val.items() if key0 != '_typedict'})
-                    keywords[key] = obj
-                else:
-                    if type(val) is list:
-                        val = tuple(val) # Seems like opencv's functions need tuples instead of lists.
-                    keywords[key] = val
-            queue.append(partial(func, **keywords))
+            queue.append(BaseUtil.from_func_dict(pDict))
         return queue
 
     from ._debug import debug
