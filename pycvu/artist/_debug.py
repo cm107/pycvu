@@ -115,11 +115,15 @@ def debug(cls: Type[Artist]):
 
     result, maskHandler = drawer.draw_and_get_masks()
 
-    maskHandler.show_preview()
+    from ..polygon import Segmentation
+
+    # maskHandler.show_preview()
     for mask in maskHandler:
         if mask._mask.sum() == 0:
             continue
-        mask.show_preview(showBBox=True, showContours=True)
+        mask.show_preview(showBBox=True, showContours=True, minNumPoints=6)
+        seg = Segmentation.from_contours(mask.contours)
+        # print(f"{seg.to_coco()=}")
 
     cv2.imshow('debug', result)
     cv2.waitKey(3000)

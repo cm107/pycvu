@@ -373,9 +373,7 @@ class Artist(Base):
             if 'refMask' in funcArgs and i in self._maskSettingDict:
                 mask = Mask(setting=self._maskSettingDict[i])
                 result = hook(result, refMask=mask)
-                # maskHandler.append(mask)
                 maskHandler.process(mask)
-                # TODO: Process occlusion
             elif 'maskHandler' in funcArgs:
                 result = hook(result, maskHandler=maskHandler)
             elif i in self._maskSettingDict:
