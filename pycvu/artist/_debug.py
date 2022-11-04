@@ -17,7 +17,6 @@ def debug(cls: Type[Artist]):
     colorInterval: Interval[Color] = Interval[Color](Color.black, Color.white)
 
     img = np.zeros((500, 500, 3), dtype=np.uint8)
-    # cls.color = Color(255, 0, 0)
     cls.color = colorInterval.random()
     cls.thickness = 1
 
@@ -37,7 +36,6 @@ def debug(cls: Type[Artist]):
         .line(p0, p1)
         .rectangle(c0, c1)
     )
-    # cls.color = Color(0, 0, 255)
     cls.color = colorInterval.random()
     cls.thickness = 4
     offset = (Vector.down + Vector.right).normalized * 50
@@ -48,7 +46,6 @@ def debug(cls: Type[Artist]):
         .line(p0 + offset, p1 + offset)
         .rectangle(c0 + offset, c1 + offset)
     )
-    # cls.color = Color(0, 255, 0)
     cls.color = colorInterval.random()
     offset = (Vector.down + Vector.left).normalized * 50
     (
@@ -58,7 +55,6 @@ def debug(cls: Type[Artist]):
         .line(p0 + offset, p1 + offset)
         .rectangle(c0 + offset, c1 + offset, fill=True)
     )
-    # cls.color = Color(255, 255, 0)
     cls.color = colorInterval.random()
     offset = Vector.up * 100
     drawer.ellipse(
@@ -66,11 +62,8 @@ def debug(cls: Type[Artist]):
         angle=30, startAngle=90, endAngle=270,
         fill=True
     )
-    if True: # TODO: Need to apply this to masks as well.
-        # drawer.resize(fx=1.1, fy=0.9)
-        drawer.resize(fx=2, fy=0.9)
-        drawer.affine_rotate(45, adjustBorder=True)
-    # cls.color = Color(255, 0, 0)
+    drawer.resize(fx=2, fy=0.9)
+    drawer.affine_rotate(45, adjustBorder=True)
     cls.color = colorInterval.random()
     cls.fontScale = 2.0
     drawer.text("Hello World!", org=(100, 100))
@@ -108,10 +101,9 @@ def debug(cls: Type[Artist]):
         cls.PIL.hankoMarginRatio = Interval[float](0.1, 0.5)
         drawer.pil.hanko(text='合格', position=PilUtil.Callback.get_position_interval)
 
-    # TODO: Serialize the mask settings.
-    # drawer.save('/tmp/artistDebugSave.json', saveImg=False, saveMeta=True)
-    # del drawer
-    # drawer = cls.load('/tmp/artistDebugSave.json', img=img, loadMeta=True) # Make sure save and load works.
+    drawer.save('/tmp/artistDebugSave.json', saveImg=False, saveMeta=True)
+    del drawer
+    drawer = cls.load('/tmp/artistDebugSave.json', img=img, loadMeta=True) # Make sure save and load works.
 
     result, maskHandler = drawer.draw_and_get_masks()
 

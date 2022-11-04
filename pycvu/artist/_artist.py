@@ -69,6 +69,7 @@ class Artist(Base):
     """Font scale used when drawing text."""
 
     maskSetting: MaskSetting = MaskSetting()
+    """Use for controlling which masks should be tracked and/or contribute to occlusion."""
 
     from ._pil_artist import PilArtist as PIL
 
@@ -90,6 +91,7 @@ class Artist(Base):
         itemDict: dict = dict()
         itemDict['_img'] = self._img.tolist() if saveImg else None
         itemDict['_drawQueue'] = self._serialize_queue()
+        itemDict['_maskSettingDict'] = {idx: maskSetting.to_dict() for idx, maskSetting in self._maskSettingDict.items()}
         
         def get_meta_dict(objCls, excludedKeys: list[str]=[]) -> dict:
             metaDict: dict = dict()
@@ -143,6 +145,7 @@ class Artist(Base):
             set_meta(artist.pil.__class__, item_dict['meta']['pil'])
         
         artist._drawQueue = artist._unserialize_queue(item_dict['_drawQueue'])
+        artist._maskSettingDict = {int(idx): MaskSetting.from_dict(maskSetting) for idx, maskSetting in item_dict['_maskSettingDict'].items()}
         return artist
 
     def save(self, path: str, saveImg: bool=True, saveMeta: bool=True):
