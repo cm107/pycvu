@@ -13,18 +13,16 @@ from ..mask import MaskSetting, Mask, MaskHandler
 from ..vector import Vector
 from ..util import CvUtil, \
     VectorVar, ImageVectorCallback, ColorVar, \
-    IntVar, FloatVar, StringVar
+    IntVar, FloatVar, StringVar, DrawCallback, RepeatDrawCallback
 
 __all__ = [
     "Artist"
 ]
 
 """
-* Need to generate random strings from a provided character array. Refer to Kume's logic.
-* Need to repeat drawing operations according to a parameter without increasing the size of the dump file. Refer to Kume's logic.
+* What next? Refer to Kume's logic.
 """
 
-from ..interval import Interval
 from ..vector import Vector
 
 
@@ -64,7 +62,7 @@ class Artist(Base):
         else:
             raise TypeError
         self._img = img
-        self._drawQueue: list[Callable[[np.ndarray], np.ndarray]] = []
+        self._drawQueue: list[DrawCallback] = []
         self._maskSettingDict: dict[int, MaskSetting] = {}
 
         self.pil = Artist.PIL(self)
@@ -139,7 +137,7 @@ class Artist(Base):
 
     def circle(
         self, center: VectorVar | ImageVectorCallback,
-        radius: IntVar, fill: bool=False
+        radius: IntVar, fill: bool=False, repeat: int=1
     ) -> Artist:
         """Draws a circle.
 
@@ -150,15 +148,16 @@ class Artist(Base):
         """
         if not self.maskSetting.skip:
             self._maskSettingDict[len(self._drawQueue)] = self.maskSetting.copy()
-        self._drawQueue.append(
-            partial(
-                CvUtil.circle,
-                center=center, radius=radius,
-                color=Artist.color,
-                thickness=Artist.thickness if not fill else -1,
-                lineType=Artist.lineType
-            )
+        p = partial(
+            CvUtil.circle,
+            center=center, radius=radius,
+            color=Artist.color,
+            thickness=Artist.thickness if not fill else -1,
+            lineType=Artist.lineType
         )
+        if repeat > 1:
+            p = RepeatDrawCallback(p, repeat=repeat)
+        self._drawQueue.append(p)
         return self
     
     def ellipse(
@@ -167,7 +166,7 @@ class Artist(Base):
         angle: FloatVar=0,
         startAngle: FloatVar=0,
         endAngle: FloatVar=360,
-        fill: bool=False
+        fill: bool=False, repeat: int=1
     ) -> Artist:
         """Draws an ellipse.
 
@@ -181,22 +180,23 @@ class Artist(Base):
         """
         if not self.maskSetting.skip:
             self._maskSettingDict[len(self._drawQueue)] = self.maskSetting.copy()
-        self._drawQueue.append(
-            partial(
-                CvUtil.ellipse,
-                center=center, axis=axis,
-                angle=angle, startAngle=startAngle, endAngle=endAngle,
-                color=Artist.color,
-                thickness=Artist.thickness if not fill else -1,
-                lineType=Artist.lineType
-            )
+        p = partial(
+            CvUtil.ellipse,
+            center=center, axis=axis,
+            angle=angle, startAngle=startAngle, endAngle=endAngle,
+            color=Artist.color,
+            thickness=Artist.thickness if not fill else -1,
+            lineType=Artist.lineType
         )
+        if repeat > 1:
+            p = RepeatDrawCallback(p, repeat=repeat)
+        self._drawQueue.append(p)
 
     def rectangle(
         self,
         pt1: VectorVar | ImageVectorCallback,
         pt2: VectorVar | ImageVectorCallback,
-        fill: bool=False
+        fill: bool=False, repeat: int=1
     ) -> Artist:
         """Draws a rectangle.
 
@@ -207,21 +207,23 @@ class Artist(Base):
         """
         if not self.maskSetting.skip:
             self._maskSettingDict[len(self._drawQueue)] = self.maskSetting.copy()
-        self._drawQueue.append(
-            partial(
-                CvUtil.rectangle,
-                pt1=pt1, pt2=pt2,
-                color=Artist.color,
-                thickness=Artist.thickness if not fill else -1,
-                lineType=Artist.lineType
-            )
+        p = partial(
+            CvUtil.rectangle,
+            pt1=pt1, pt2=pt2,
+            color=Artist.color,
+            thickness=Artist.thickness if not fill else -1,
+            lineType=Artist.lineType
         )
+        if repeat > 1:
+            p = RepeatDrawCallback(p, repeat=repeat)
+        self._drawQueue.append(p)
         return self
     
     def line(
         self,
         pt1: VectorVar | ImageVectorCallback,
-        pt2: VectorVar | ImageVectorCallback
+        pt2: VectorVar | ImageVectorCallback,
+        repeat: int=1
     ) -> Artist:
         """Draws a line.
 
@@ -231,15 +233,16 @@ class Artist(Base):
         """
         if not self.maskSetting.skip:
             self._maskSettingDict[len(self._drawQueue)] = self.maskSetting.copy()
-        self._drawQueue.append(
-            partial(
-                CvUtil.line,
-                pt1=pt1, pt2=pt2,
-                color=Artist.color,
-                thickness=Artist.thickness,
-                lineType=Artist.lineType
-            )
+        p = partial(
+            CvUtil.line,
+            pt1=pt1, pt2=pt2,
+            color=Artist.color,
+            thickness=Artist.thickness,
+            lineType=Artist.lineType
         )
+        if repeat > 1:
+            p = RepeatDrawCallback(p, repeat=repeat)
+        self._drawQueue.append(p)
         return self
     
     def affine_rotate(
@@ -265,21 +268,20 @@ class Artist(Base):
                 Defaults to False.
             center (tuple[int, int] | Vector, optional): The center of rotation. Defaults to center of the image.
         """
-        self._drawQueue.append(
-            partial(
-                CvUtil.affine_rotate,
-                angle=angle, degrees=degrees,
-                scale=scale, interpolation=Artist.interpolation,
-                adjustBorder=adjustBorder, center=center,
-                borderColor=Artist.color
-            )
+        p = partial(
+            CvUtil.affine_rotate,
+            angle=angle, degrees=degrees,
+            scale=scale, interpolation=Artist.interpolation,
+            adjustBorder=adjustBorder, center=center,
+            borderColor=Artist.color
         )
+        self._drawQueue.append(p)
         return self
 
     def text(
         self, text: StringVar,
         org: VectorVar,
-        bottomLeftOrigin: bool=False
+        bottomLeftOrigin: bool=False, repeat: int=1
     ) -> Artist:
         """Draws text on the image.
 
@@ -294,16 +296,17 @@ class Artist(Base):
         """
         if not self.maskSetting.skip:
             self._maskSettingDict[len(self._drawQueue)] = self.maskSetting.copy()
-        self._drawQueue.append(
-            partial(
-                CvUtil.text,
-                text=text, org=org,
-                fontFace=Artist.fontFace, fontScale=Artist.fontScale,
-                color=Artist.color, thickness=Artist.thickness,
-                lineType=Artist.lineType,
-                bottomLeftOrigin=bottomLeftOrigin
-            )
+        p = partial(
+            CvUtil.text,
+            text=text, org=org,
+            fontFace=Artist.fontFace, fontScale=Artist.fontScale,
+            color=Artist.color, thickness=Artist.thickness,
+            lineType=Artist.lineType,
+            bottomLeftOrigin=bottomLeftOrigin
         )
+        if repeat > 1:
+            p = RepeatDrawCallback(p, repeat=repeat)
+        self._drawQueue.append(p)
 
     @overload
     def resize(self, dsize: VectorVar) -> Artist:
@@ -329,21 +332,25 @@ class Artist(Base):
         self, dsize: VectorVar=None,
         fx: FloatVar=None, fy: FloatVar=None
     ) -> Artist:
-        self._drawQueue.append(
-            partial(
-                CvUtil.resize,
-                dsize=dsize,
-                fx=fx, fy=fy,
-                interpolation=Artist.interpolation
-            )
+        p = partial(
+            CvUtil.resize,
+            dsize=dsize,
+            fx=fx, fy=fy,
+            interpolation=Artist.interpolation
         )
+        self._drawQueue.append(p)
 
     def draw(self) -> np.ndarray:
         """Perform all of the actions in the drawing queue on the source image and return the result.
         """
         result = self._img.copy()
         for hook in self._drawQueue:
-            result = hook(result)
+            if type(hook) is partial:
+                h = RepeatDrawCallback(hook)
+            else:
+                h = hook
+            for i in range(h.repeat):
+                result = h.p(result)
         return result
     
     def draw_and_get_masks(self) -> tuple[np.ndarray, MaskHandler]:
@@ -354,18 +361,26 @@ class Artist(Base):
 
         maskHandler = MaskHandler()
         for i, hook in enumerate(self._drawQueue):
-            funcArgs: list[str] = inspect.getfullargspec(hook.func).args
+            if type(hook) is partial:
+                h = RepeatDrawCallback(hook)
+            else:
+                h = hook
+            funcArgs: list[str] = inspect.getfullargspec(h.p.func).args
             if 'refMask' in funcArgs and i in self._maskSettingDict:
-                mask = Mask(setting=self._maskSettingDict[i])
-                result = hook(result, refMask=mask)
-                maskHandler.process(mask)
+                for i in range(h.repeat):
+                    mask = Mask(setting=self._maskSettingDict[i])
+                    result = h.p(result, refMask=mask)
+                    maskHandler.process(mask)
             elif 'maskHandler' in funcArgs:
-                result = hook(result, maskHandler=maskHandler)
+                for i in range(h.repeat):
+                    result = h.p(result, maskHandler=maskHandler)
             elif i in self._maskSettingDict:
                 print(f"TODO: Implement refMask for {hook.func.__qualname__}")
-                result = hook(result)
+                for i in range(h.repeat):
+                    result = h.p(result)
             else:
-                result = hook(result)
+                for i in range(h.repeat):
+                    result = hook(result)
         return result, maskHandler
 
     def draw_and_save(self, path: str):
@@ -376,13 +391,20 @@ class Artist(Base):
     def _serialize_queue(self) -> list[dict]:
         result: list[dict] = []
         for p in self._drawQueue:
-            result.append(BaseUtil.to_func_dict(p))
+            if type(p) is RepeatDrawCallback:
+                result.append(p.to_dict())
+            else:
+                result.append(BaseUtil.to_func_dict(p))
         return result
 
-    def _unserialize_queue(self, serializedQueue: list[dict]) -> list[Callable[[np.ndarray], np.ndarray]]:
-        queue: list[Callable[[np.ndarray], np.ndarray]] = []
+    def _unserialize_queue(self, serializedQueue: list[dict]) -> list[DrawCallback]:
+        queue: list[DrawCallback] = []
         for pDict in serializedQueue:
-            queue.append(BaseUtil.from_func_dict(pDict))
+            if '_typedict' in pDict:
+                assert pDict['_typedict']['_qualname'] == RepeatDrawCallback.__name__
+                queue.append(RepeatDrawCallback.from_dict(pDict))
+            else:
+                queue.append(BaseUtil.from_func_dict(pDict))
         return queue
 
     from ._debug import debug

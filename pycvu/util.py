@@ -2,6 +2,7 @@ from __future__ import annotations
 import math
 import copy
 from typing import Any, Callable, Literal, overload, TYPE_CHECKING
+from functools import partial
 import cv2
 from PIL import Image as pilImage, \
     ImageDraw as pilImageDraw, \
@@ -13,6 +14,7 @@ from pycvu.interval import Interval
 from .color import Color, HSV
 from .vector import Vector
 from .text_generator import TextGenerator
+from .base import BaseUtil
 if TYPE_CHECKING:
     from .mask import Mask, MaskHandler
 
@@ -29,6 +31,27 @@ PilImageVectorCallback = Callable[[pilImage.Image], VectorVar]
 ColorVar = tuple[int, int, int] | Color | HSV | Interval
 IntVar = int | Interval
 FloatVar = float | Interval
+
+class RepeatDrawCallback:
+    def __init__(self, p: partial, repeat: int=1):
+        self.p = p
+        self.repeat = repeat
+    
+    def to_dict(self) -> dict:
+        return dict(
+            p=BaseUtil.to_func_dict(self.p),
+            repeat=self.repeat,
+            _typedict=BaseUtil.to_type_dict(type(self))
+        )
+    
+    @classmethod
+    def from_dict(cls, item_dict: dict) -> RepeatDrawCallback:
+        return RepeatDrawCallback(
+            p=BaseUtil.from_func_dict(item_dict['p']),
+            repeat=item_dict['repeat']
+        )
+
+DrawCallback = Callable[[np.ndarray], np.ndarray] | partial | RepeatDrawCallback
 
 class Util:
     @staticmethod

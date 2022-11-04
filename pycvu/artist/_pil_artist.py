@@ -8,7 +8,8 @@ import pycvu
 
 from ..util import Util, PilUtil, \
     VectorVar, PilImageVectorCallback, \
-    IntVar, FloatVar, StringVar
+    IntVar, FloatVar, StringVar, \
+    DrawCallback, RepeatDrawCallback
 if TYPE_CHECKING:
     from ._artist import Artist
 
@@ -47,7 +48,8 @@ class PilArtist:
     @_pillow_decorator
     def text(
         self, text: StringVar,
-        position: VectorVar | PilImageVectorCallback
+        position: VectorVar | PilImageVectorCallback,
+        repeat: int=1
     ) -> Artist:
         """Draws text on the image.
 
@@ -57,35 +59,38 @@ class PilArtist:
         """
         if not self._artist.maskSetting.skip:
             self._artist._maskSettingDict[len(self._artist._drawQueue)] = self._artist.maskSetting.copy()
-        self._artist._drawQueue.append(
-            partial(
-                PilUtil.text,
-                text=text,
-                fontPath=PilArtist.fontPath,
-                fontSize=PilArtist.fontSize,
-                color=Util.bgr_to_rgb(self._artist.color),
-                position=position
-            )
+        p = partial(
+            PilUtil.text,
+            text=text,
+            fontPath=PilArtist.fontPath,
+            fontSize=PilArtist.fontSize,
+            color=Util.bgr_to_rgb(self._artist.color),
+            position=position
         )
+        if repeat > 1:
+            p = RepeatDrawCallback(p, repeat=repeat)
+        self._artist._drawQueue.append(p)
         return self
     
     @_pillow_decorator
     def hanko(
-        self, text: StringVar, position: VectorVar | PilImageVectorCallback
+        self, text: StringVar, position: VectorVar | PilImageVectorCallback,
+        repeat: int=1
     ) -> Artist:
         if not self._artist.maskSetting.skip:
             self._artist._maskSettingDict[len(self._artist._drawQueue)] = self._artist.maskSetting.copy()
-        self._artist._drawQueue.append(
-            partial(
-                PilUtil.hanko,
-                text=text,
-                fontPath=PilArtist.fontPath, fontSize=PilArtist.fontSize,
-                color=Util.bgr_to_rgb(self._artist.color),
-                position=position,
-                direction='ttb' if PilArtist.hankoIsVertical else 'ltr',
-                outlineWidth=PilArtist.hankoOutlineWidth,
-                marginOffset=PilArtist.hankoMarginOffset,
-                marginRatio=PilArtist.hankoMarginRatio
-            )
+        p = partial(
+            PilUtil.hanko,
+            text=text,
+            fontPath=PilArtist.fontPath, fontSize=PilArtist.fontSize,
+            color=Util.bgr_to_rgb(self._artist.color),
+            position=position,
+            direction='ttb' if PilArtist.hankoIsVertical else 'ltr',
+            outlineWidth=PilArtist.hankoOutlineWidth,
+            marginOffset=PilArtist.hankoMarginOffset,
+            marginRatio=PilArtist.hankoMarginRatio
         )
+        if repeat > 1:
+            p = RepeatDrawCallback(p, repeat=repeat)
+        self._artist._drawQueue.append(p)
         return self
