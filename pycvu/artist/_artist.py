@@ -13,33 +13,15 @@ from ..mask import MaskSetting, Mask, MaskHandler
 from ..vector import Vector
 from ..util import CvUtil, \
     VectorVar, ImageVectorCallback, ColorVar, \
-    IntVar, FloatVar
+    IntVar, FloatVar, StringVar
 
 __all__ = [
     "Artist"
 ]
 
 """
-* Need to implement logic to keep track of masks. Refer to Kume's algorithms.
-    * At the very least, I need to get the mask of each hanko for calculating the bbox and segmentation.
-    * It is possible that the hanko will have occlusion if something else is drawn on top of it.
-    * Do I need to generate a mask for each thing that is drawn?
-        * That would be the most flexible, but the hardest to implement.
-        * It might also take up considerable memory at runtime?
-        * Doing this would make it easy to account for occlusion.
-            * I could step through each mask and erase the parts that overlap with proceeding masks.
-        * Resize and rotation operations would affect the masks as well.
-            * This needs to be accounted for with caution.
-            * I'm guessing the interpolation method is going to matter when resizing/rotating a boolean mask.
-    * I should probably pass a list of masks into each drawing method by reference.
-        * This way the masks can be updated whenever necessary.
-        * It can be an optional parameter.
-        * Approach Possibilities:
-            * Keep track of the mask of all drawing operations.
-                * This would take up more memory at runtime.
-            * Keep track of just the masks that matter.
-                * This would take up less memory at runtime.
-                * Masks would need to be updated on-the-go, since the other masks still cause occlusion.
+* Need to generate random strings from a provided character array. Refer to Kume's logic.
+* Need to repeat drawing operations according to a parameter without increasing the size of the dump file. Refer to Kume's logic.
 """
 
 from ..interval import Interval
@@ -295,7 +277,7 @@ class Artist(Base):
         return self
 
     def text(
-        self, text: str,
+        self, text: StringVar,
         org: VectorVar,
         bottomLeftOrigin: bool=False
     ) -> Artist:

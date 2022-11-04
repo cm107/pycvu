@@ -12,6 +12,7 @@ from pycvu.interval import Interval
 
 from .color import Color, HSV
 from .vector import Vector
+from .text_generator import TextGenerator
 if TYPE_CHECKING:
     from .mask import Mask, MaskHandler
 
@@ -21,6 +22,7 @@ __all__ = [
     "PilUtil"
 ]
 
+StringVar = str | TextGenerator
 VectorVar = tuple[int, int] | Vector | Interval
 ImageVectorCallback = Callable[[np.ndarray], VectorVar]
 PilImageVectorCallback = Callable[[pilImage.Image], VectorVar]
@@ -133,6 +135,15 @@ class Util:
         if asInt:
             result = Util.cast_int(result)
         return result
+
+    @staticmethod
+    def cast_str(value: StringVar) -> str:
+        if type(value) is str:
+            return value
+        elif type(value) is TextGenerator:
+            return value.random()
+        else:
+            raise TypeError
 
     @staticmethod
     def cast_builtin(value: Any | Interval, asInt: bool=False) -> Any:
@@ -306,7 +317,7 @@ class CvUtil:
         return cv2.warpAffine(img, affineMatrix, sizeRotation, flags=interpolation, borderValue=borderColor)
     
     def text(
-        img: np.ndarray, text: str,
+        img: np.ndarray, text: StringVar,
         org: VectorVar,
         fontFace: int=cv2.FONT_HERSHEY_SIMPLEX,
         fontScale: FloatVar=1,
@@ -315,6 +326,7 @@ class CvUtil:
         lineType: int=None, bottomLeftOrigin: bool=False,
         refMask: Mask=None
     ) -> np.ndarray:
+        text = Util.cast_str(text)
         org = Util.cast_vector(org)
         fontScale = Util.cast_builtin(fontScale)
         color = Util.cast_color(color)
@@ -383,7 +395,7 @@ class CvUtil:
 class PilUtil:
     @staticmethod
     def text(
-        img: pilImage.Image, text: str,
+        img: pilImage.Image, text: StringVar,
         fontPath: str,
         fontSize: IntVar,
         color: ColorVar,
@@ -392,6 +404,7 @@ class PilUtil:
         direction: Literal['rtl', 'ltr', 'ttb']='ltr',
         refMask: Mask=None
     ) -> pilImage.Image:
+        text = Util.cast_str(text)
         fontSize = Util.cast_builtin(fontSize, asInt=True)
         color = Util.cast_color(color, tupleAttr='rgb', asInt=True)
         if callable(position):
@@ -489,7 +502,7 @@ class PilUtil:
 
     @staticmethod
     def hanko(
-        img: pilImage.Image, text: str,
+        img: pilImage.Image, text: StringVar,
         fontPath: str,
         fontSize: IntVar,
         color: ColorVar,
@@ -500,6 +513,7 @@ class PilUtil:
         marginRatio: FloatVar = 0,
         refMask: Mask=None
     ):
+        text = Util.cast_str(text)
         fontSize = Util.cast_builtin(fontSize)
         color = Util.cast_color(color, tupleAttr='rgb', asInt=True)
         if callable(position):

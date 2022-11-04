@@ -8,7 +8,7 @@ import pycvu
 
 from ..util import Util, PilUtil, \
     VectorVar, PilImageVectorCallback, \
-    IntVar, FloatVar
+    IntVar, FloatVar, StringVar
 if TYPE_CHECKING:
     from ._artist import Artist
 
@@ -46,7 +46,7 @@ class PilArtist:
 
     @_pillow_decorator
     def text(
-        self, text: str,
+        self, text: StringVar,
         position: VectorVar | PilImageVectorCallback
     ) -> Artist:
         """Draws text on the image.
@@ -71,7 +71,7 @@ class PilArtist:
     
     @_pillow_decorator
     def hanko(
-        self, text: str, position: VectorVar | PilImageVectorCallback
+        self, text: StringVar, position: VectorVar | PilImageVectorCallback
     ) -> Artist:
         if not self._artist.maskSetting.skip:
             self._artist._maskSettingDict[len(self._artist._drawQueue)] = self._artist.maskSetting.copy()
