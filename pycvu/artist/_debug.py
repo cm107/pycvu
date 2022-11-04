@@ -12,6 +12,8 @@ if TYPE_CHECKING:
 
 @classmethod
 def debug(cls: Type[Artist]):
+    cls.maskSetting.track = True; cls.maskSetting.canBeOccluded = True; cls.maskSetting.canOcclude = True
+
     colorInterval: Interval[Color] = Interval[Color](Color.black, Color.white)
 
     img = np.zeros((500, 500, 3), dtype=np.uint8)
@@ -64,14 +66,16 @@ def debug(cls: Type[Artist]):
         angle=30, startAngle=90, endAngle=270,
         fill=True
     )
-    drawer.resize(fx=1.1, fy=0.9)
-    drawer.affine_rotate(45, adjustBorder=True)
+    if True: # TODO: Need to apply this to masks as well.
+        # drawer.resize(fx=1.1, fy=0.9)
+        drawer.resize(fx=2, fy=0.9)
+        drawer.affine_rotate(45, adjustBorder=True)
     # cls.color = Color(255, 0, 0)
     cls.color = colorInterval.random()
     cls.fontScale = 2.0
     drawer.text("Hello World!", org=(100, 100))
     drawer.text("Hello World!", org=(100, 200), bottomLeftOrigin=True)
-    
+
     drawer.pil.text(text="荒唐無稽", position=(300, 300))
     
     cls.color = Color(255, 0, 0)
@@ -104,11 +108,18 @@ def debug(cls: Type[Artist]):
         cls.PIL.hankoMarginRatio = Interval[float](0.1, 0.5)
         drawer.pil.hanko(text='合格', position=PilUtil.Callback.get_position_interval)
 
-    drawer.save('/tmp/artistDebugSave.json', saveImg=False, saveMeta=True)
-    del drawer
-    drawer = cls.load('/tmp/artistDebugSave.json', img=img, loadMeta=True) # Make sure save and load works.
+    # TODO: Serialize the mask settings.
+    # drawer.save('/tmp/artistDebugSave.json', saveImg=False, saveMeta=True)
+    # del drawer
+    # drawer = cls.load('/tmp/artistDebugSave.json', img=img, loadMeta=True) # Make sure save and load works.
 
-    result = drawer.draw()
+    result, maskHandler = drawer.draw_and_get_masks()
+
+    maskHandler.show_preview()
+    for mask in maskHandler:
+        if mask._mask.sum() == 0:
+            continue
+        mask.show_preview(showBBox=True, showContours=True)
 
     cv2.imshow('debug', result)
     cv2.waitKey(3000)

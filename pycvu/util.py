@@ -1,7 +1,7 @@
 from __future__ import annotations
 import math
 import copy
-from typing import Any, Callable, Literal, overload
+from typing import Any, Callable, Literal, overload, TYPE_CHECKING
 import cv2
 from PIL import Image as pilImage, \
     ImageDraw as pilImageDraw, \
@@ -12,6 +12,8 @@ from pycvu.interval import Interval
 
 from .color import Color, HSV
 from .vector import Vector
+if TYPE_CHECKING:
+    from .mask import Mask, MaskHandler
 
 __all__ = [
     "Util",
@@ -149,7 +151,8 @@ class CvUtil:
         radius: IntVar,
         color: ColorVar,
         thickness: IntVar,
-        lineType: int
+        lineType: int,
+        refMask: Mask=None
     ) -> np.ndarray:
         if callable(center):
             center = center(img)
@@ -157,6 +160,14 @@ class CvUtil:
         radius = Util.cast_builtin(radius)
         color = Util.cast_color(color)
         thickness = Util.cast_builtin(thickness)
+
+        if refMask is not None:
+            mask = np.zeros_like(img, dtype=np.uint8)
+            maskColor = (255, 255, 255)
+            mask = cv2.circle(mask, center, radius, maskColor, thickness, lineType)
+            mask = MaskUtil.eq_color(mask, color=maskColor)
+            refMask._mask = mask
+            
         return cv2.circle(img, center, radius, color, thickness, lineType)
     
     @staticmethod
@@ -169,7 +180,8 @@ class CvUtil:
         endAngle: FloatVar,
         color: ColorVar,
         thickness: IntVar,
-        lineType: int
+        lineType: int,
+        refMask: Mask=None
     ):
         if callable(center):
             center = center(img)
@@ -183,6 +195,14 @@ class CvUtil:
             endAngle = tmp
         color = Util.cast_color(color)
         thickness = Util.cast_builtin(thickness)
+
+        if refMask is not None:
+            mask = np.zeros_like(img, dtype=np.uint8)
+            maskColor = (255, 255, 255)
+            mask = cv2.ellipse(mask, center, axis, angle, startAngle, endAngle, maskColor, thickness, lineType)
+            mask = MaskUtil.eq_color(mask, color=maskColor)
+            refMask._mask = mask
+
         return cv2.ellipse(img, center, axis, angle, startAngle, endAngle, color, thickness, lineType)
 
     @staticmethod
@@ -192,7 +212,8 @@ class CvUtil:
         pt2: VectorVar | ImageVectorCallback,
         color: ColorVar,
         thickness: IntVar,
-        lineType: int
+        lineType: int,
+        refMask: Mask=None
     ) -> np.ndarray:
         if callable(pt1):
             pt1 = pt1(img)
@@ -202,6 +223,14 @@ class CvUtil:
         pt2 = Util.cast_vector(pt2)
         color = Util.cast_color(color)
         thickness = Util.cast_builtin(thickness)
+
+        if refMask is not None:
+            mask = np.zeros_like(img, dtype=np.uint8)
+            maskColor = (255, 255, 255)
+            mask = cv2.rectangle(mask, pt1, pt2, maskColor, thickness, lineType)
+            mask = MaskUtil.eq_color(mask, color=maskColor)
+            refMask._mask = mask
+
         return cv2.rectangle(img, pt1, pt2, color, thickness, lineType)
 
     @staticmethod
@@ -211,7 +240,8 @@ class CvUtil:
         pt2: VectorVar | ImageVectorCallback,
         color: ColorVar,
         thickness: IntVar,
-        lineType: int
+        lineType: int,
+        refMask: Mask=None
     ) -> np.ndarray:
         if callable(pt1):
             pt1 = pt1(img)
@@ -221,6 +251,14 @@ class CvUtil:
         pt2 = Util.cast_vector(pt2)
         color = Util.cast_color(color)
         thickness = Util.cast_builtin(thickness)
+
+        if refMask is not None:
+            mask = np.zeros_like(img, dtype=np.uint8)
+            maskColor = (255, 255, 255)
+            mask = cv2.line(mask, pt1, pt2, maskColor, thickness, lineType)
+            mask = MaskUtil.eq_color(mask, color=maskColor)
+            refMask._mask = mask
+
         return cv2.line(img, pt1, pt2, color, thickness, lineType)
     
     @staticmethod
@@ -233,6 +271,7 @@ class CvUtil:
         adjustBorder: bool=False,
         center: VectorVar=None,
         borderColor: ColorVar=(255, 255, 255),
+        maskHandler: MaskHandler=None
     ) -> np.ndarray:
         angle = Util.cast_builtin(angle)
         scale = Util.cast_builtin(scale)
@@ -256,6 +295,14 @@ class CvUtil:
             affineMatrix[1][2] = affineMatrix[1][2] - h/2 + hRot/2
         if type(borderColor) is Color:
             borderColor = borderColor.bgr
+
+        if maskHandler is not None:
+            for mask in maskHandler: # Seems to cause considerable overhead when tracking a lot of masks.
+                assert mask._mask is not None
+                maskBGR = MaskUtil.bool_to_bgr(mask._mask)
+                maskBGR = cv2.warpAffine(maskBGR, affineMatrix, sizeRotation, flags=interpolation, borderValue=(0, 0, 0))
+                mask._mask = MaskUtil.bgr_to_bool(maskBGR)
+
         return cv2.warpAffine(img, affineMatrix, sizeRotation, flags=interpolation, borderValue=borderColor)
     
     def text(
@@ -265,12 +312,23 @@ class CvUtil:
         fontScale: FloatVar=1,
         color: ColorVar = (255, 255, 255),
         thickness: IntVar=None,
-        lineType: int=None, bottomLeftOrigin: bool=False
+        lineType: int=None, bottomLeftOrigin: bool=False,
+        refMask: Mask=None
     ) -> np.ndarray:
         org = Util.cast_vector(org)
         fontScale = Util.cast_builtin(fontScale)
         color = Util.cast_color(color)
         thickness = Util.cast_builtin(thickness)
+
+        if refMask is not None:
+            mask = np.zeros_like(img, dtype=np.uint8)
+            maskColor = (255, 255, 255)
+            mask = cv2.putText(
+                mask, text, org, fontFace, fontScale, maskColor, thickness, lineType, bottomLeftOrigin
+            )
+            mask = MaskUtil.eq_color(mask, color=maskColor)
+            refMask._mask = mask
+
         return cv2.putText(
             img, text, org, fontFace, fontScale, color, thickness, lineType, bottomLeftOrigin
         )
@@ -280,14 +338,16 @@ class CvUtil:
     def resize(
         src: np.ndarray,
         dsize: VectorVar,
-        interpolation: int=None
+        interpolation: int=None,
+        maskHandler: MaskHandler=None
     ) -> np.ndarray: ...
 
     @overload
     def resize(
         src: np.ndarray,
         fx: FloatVar, fy: FloatVar,
-        interpolation: int=None
+        interpolation: int=None,
+        maskHandler: MaskHandler=None
     ) -> np.ndarray: ...
 
     @staticmethod
@@ -295,11 +355,20 @@ class CvUtil:
         src: np.ndarray,
         dsize: VectorVar=None,
         fx: FloatVar=None, fy: FloatVar=None,
-        interpolation: int=None
+        interpolation: int=None,
+        maskHandler: MaskHandler=None
     ) -> np.ndarray:
         dsize = Util.cast_vector(dsize)
         fx = Util.cast_builtin(fx)
         fy = Util.cast_builtin(fy)
+
+        if maskHandler is not None:
+            for mask in maskHandler: # Seems to cause considerable overhead when tracking a lot of masks.
+                assert mask._mask is not None
+                maskBGR = MaskUtil.bool_to_bgr(mask._mask)
+                maskBGR = cv2.resize(maskBGR, dsize=dsize, fx=fx, fy=fy, interpolation=interpolation)
+                mask._mask = MaskUtil.bgr_to_bool(maskBGR)
+
         return cv2.resize(src, dsize=dsize, fx=fx, fy=fy, interpolation=interpolation)
 
     class Callback:
@@ -320,7 +389,8 @@ class PilUtil:
         color: ColorVar,
         position: VectorVar | PilImageVectorCallback,
         align: Literal['left', 'center', 'right']='left',
-        direction: Literal['rtl', 'ltr', 'ttb']='ltr'
+        direction: Literal['rtl', 'ltr', 'ttb']='ltr',
+        refMask: Mask=None
     ) -> pilImage.Image:
         fontSize = Util.cast_builtin(fontSize, asInt=True)
         color = Util.cast_color(color, tupleAttr='rgb', asInt=True)
@@ -332,6 +402,22 @@ class PilUtil:
         font = pilImageFont.truetype(font=fontPath, size=fontSize)
         w, h = draw.textsize(text, font=font, direction=direction)
         position = (position[0] - w/2, position[1] - h/2)
+
+        if refMask is not None:
+            mask = pilImage.new("RGB", (img.width, img.height), color=(0, 0, 0))
+            drawMask = pilImageDraw.Draw(mask, mode=None)
+            maskColor = (255, 255, 255)
+            drawMask.text(
+                xy=position,
+                text=text,
+                fill=maskColor,
+                font=font,
+                align=align,
+                direction=direction
+            )
+            mask = Util.pil_to_cv(mask)
+            mask = MaskUtil.eq_color(mask, color=maskColor)
+            refMask._mask = mask
 
         draw.text(
             xy=position,
@@ -350,7 +436,8 @@ class PilUtil:
         axis: VectorVar,
         fillColor: ColorVar=None,
         outlineColor: ColorVar=None,
-        outlineWidth: IntVar=None
+        outlineWidth: IntVar=None,
+        refMask: Mask=None
     ) -> pilImage.Image:
         if callable(center):
             center = center(img)
@@ -364,6 +451,21 @@ class PilUtil:
         p1 = (center[0] + axis[0], center[1] + axis[1])
         shape: list[float] = list(p0) + list(p1)
         draw = pilImageDraw.Draw(img, mode=None)
+
+        if refMask is not None:
+            mask = pilImage.new("RGB", (img.width, img.height), color=(0, 0, 0))
+            drawMask = pilImageDraw.Draw(mask, mode=None)
+            maskColor = (255, 255, 255)
+            drawMask.ellipse(
+                xy=shape,
+                fill=maskColor if fillColor is not None else None,
+                outline=maskColor if outlineColor is not None else None,
+                width=outlineWidth
+            )
+            mask = Util.pil_to_cv(mask)
+            mask = MaskUtil.eq_color(mask, color=maskColor)
+            refMask._mask = mask
+
         draw.ellipse(xy=shape, fill=fillColor, outline=outlineColor, width=outlineWidth)
         return img
 
@@ -374,13 +476,15 @@ class PilUtil:
         radius: FloatVar,
         fillColor: ColorVar=None,
         outlineColor: ColorVar=None,
-        outlineWidth: IntVar=None
+        outlineWidth: IntVar=None,
+        refMask: Mask=None
     ) -> pilImage.Image:
         radius = Util.cast_builtin(radius)
         return PilUtil.ellipse(
             img=img, center=center, axis=(radius, radius),
             fillColor=fillColor, outlineColor=outlineColor,
-            outlineWidth=outlineWidth
+            outlineWidth=outlineWidth,
+            refMask=refMask
         )
 
     @staticmethod
@@ -393,7 +497,8 @@ class PilUtil:
         direction: Literal['rtl', 'ltr', 'ttb']='ttb',
         outlineWidth: IntVar=20,
         marginOffset: FloatVar = 0,
-        marginRatio: FloatVar = 0
+        marginRatio: FloatVar = 0,
+        refMask: Mask=None
     ):
         fontSize = Util.cast_builtin(fontSize)
         color = Util.cast_color(color, tupleAttr='rgb', asInt=True)
@@ -423,8 +528,22 @@ class PilUtil:
         PilUtil.circle(
             img, center=position, radius=r,
             fillColor=None, outlineColor=color,
-            outlineWidth=outlineWidth
+            outlineWidth=outlineWidth,
+            refMask=refMask
         )
+        if refMask is not None:
+            textMask = pilImage.new("RGB", (img.width, img.height), color=(0, 0, 0))
+            drawTextMask = pilImageDraw.Draw(textMask, mode=None)
+            textMaskColor = (255, 255, 255)
+            drawTextMask.text(
+                xy=textPosition, text=text, fill=textMaskColor,
+                font=font, direction=direction
+            )
+            textMask = Util.pil_to_cv(textMask)
+            textMask = MaskUtil.eq_color(textMask, color=textMaskColor)
+            assert refMask._mask is not None
+            refMask._mask |= textMask
+            
         return img
 
     class Callback:
@@ -448,3 +567,32 @@ class PilUtil:
             marginOffset=0, marginRatio=0.1
         )
         img.show()
+
+import numpy.typing as npt
+
+class MaskUtil:
+    @staticmethod
+    def occlude(subMask: npt.NDArray[np.bool_], fromMask: npt.NDArray[np.bool_]):
+        fromMask[subMask & fromMask] = False
+
+    @staticmethod
+    def eq_color(img: np.ndarray, color: tuple[int, int, int] | Color) -> npt.NDArray[np.bool_]:
+        if type(color) is Color:
+            color = color.bgr
+        return np.all(img == color, axis=2)
+
+    @staticmethod
+    def neq_color(img: np.ndarray, color: tuple[int, int, int] | Color) -> npt.NDArray[np.bool_]:
+        if type(color) is Color:
+            color = color.bgr
+        return ~MaskUtil.eq_color(img, color)
+
+    @staticmethod
+    def bool_to_bgr(mask: npt.NDArray[np.bool_]) -> npt.NDArray[np.uint8]:
+        maskImg = np.zeros(tuple(list(mask.shape) + [3]))
+        maskImg[mask] = (255, 255, 255)
+        return maskImg
+    
+    @staticmethod
+    def bgr_to_bool(mask: npt.NDArray[np.uint8]) -> npt.NDArray[np.bool_]:
+        return MaskUtil.neq_color(mask, (0, 0, 0))

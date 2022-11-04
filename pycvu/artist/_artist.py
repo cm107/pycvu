@@ -9,6 +9,7 @@ import numpy as np
 from pycvu.base import BaseUtil, Base
 
 from ..color import Color
+from ..mask import MaskSetting, Mask, MaskHandler
 from ..vector import Vector
 from ..util import CvUtil, \
     VectorVar, ImageVectorCallback, ColorVar, \
@@ -19,9 +20,26 @@ __all__ = [
 ]
 
 """
-TODO: Need to implement methods for drawing shapes and text randomly.
-* Move all type conversion logic to util script. Prep for random drawing methods.
-* Need to continue replacing Kume-san's code starting with the interval objects.
+* Need to implement logic to keep track of masks. Refer to Kume's algorithms.
+    * At the very least, I need to get the mask of each hanko for calculating the bbox and segmentation.
+    * It is possible that the hanko will have occlusion if something else is drawn on top of it.
+    * Do I need to generate a mask for each thing that is drawn?
+        * That would be the most flexible, but the hardest to implement.
+        * It might also take up considerable memory at runtime?
+        * Doing this would make it easy to account for occlusion.
+            * I could step through each mask and erase the parts that overlap with proceeding masks.
+        * Resize and rotation operations would affect the masks as well.
+            * This needs to be accounted for with caution.
+            * I'm guessing the interpolation method is going to matter when resizing/rotating a boolean mask.
+    * I should probably pass a list of masks into each drawing method by reference.
+        * This way the masks can be updated whenever necessary.
+        * It can be an optional parameter.
+        * Approach Possibilities:
+            * Keep track of the mask of all drawing operations.
+                * This would take up more memory at runtime.
+            * Keep track of just the masks that matter.
+                * This would take up less memory at runtime.
+                * Masks would need to be updated on-the-go, since the other masks still cause occlusion.
 """
 
 from ..interval import Interval
@@ -50,6 +68,8 @@ class Artist(Base):
     fontScale: FloatVar = 1.0
     """Font scale used when drawing text."""
 
+    maskSetting: MaskSetting = MaskSetting()
+
     from ._pil_artist import PilArtist as PIL
 
     def __init__(self, src: np.ndarray | str):
@@ -62,6 +82,7 @@ class Artist(Base):
             raise TypeError
         self._img = img
         self._drawQueue: list[Callable[[np.ndarray], np.ndarray]] = []
+        self._maskSettingDict: dict[int, MaskSetting] = {}
 
         self.pil = Artist.PIL(self)
     
@@ -142,6 +163,8 @@ class Artist(Base):
             radius (int): Radius of the circle.
             fill (bool, optional): Whether or not to fill the circle in. Defaults to False.
         """
+        if not self.maskSetting.skip:
+            self._maskSettingDict[len(self._drawQueue)] = self.maskSetting.copy()
         self._drawQueue.append(
             partial(
                 CvUtil.circle,
@@ -171,6 +194,8 @@ class Artist(Base):
             endAngle (float, optional): The angle that you want to stop drawing the ellipse at. Defaults to 360.
             fill (bool, optional): Whether or not you want to fill in the ellipse when drawing. Defaults to False.
         """
+        if not self.maskSetting.skip:
+            self._maskSettingDict[len(self._drawQueue)] = self.maskSetting.copy()
         self._drawQueue.append(
             partial(
                 CvUtil.ellipse,
@@ -195,6 +220,8 @@ class Artist(Base):
             pt2 (tuple[int, int] | Vector): Second corner of rectangle.
             fill (bool, optional): Whether or not to fill in the rectangle when drawing. Defaults to False.
         """
+        if not self.maskSetting.skip:
+            self._maskSettingDict[len(self._drawQueue)] = self.maskSetting.copy()
         self._drawQueue.append(
             partial(
                 CvUtil.rectangle,
@@ -217,6 +244,8 @@ class Artist(Base):
             pt1 (tuple[int, int] | Vector): Where to start drawing the line.
             pt2 (tuple[int, int] | Vector): Where to stop drawing the line.
         """
+        if not self.maskSetting.skip:
+            self._maskSettingDict[len(self._drawQueue)] = self.maskSetting.copy()
         self._drawQueue.append(
             partial(
                 CvUtil.line,
@@ -278,6 +307,8 @@ class Artist(Base):
                 assumption to be the bottom-left corner of the image.
                 Defaults to False.
         """
+        if not self.maskSetting.skip:
+            self._maskSettingDict[len(self._drawQueue)] = self.maskSetting.copy()
         self._drawQueue.append(
             partial(
                 CvUtil.text,
@@ -330,6 +361,30 @@ class Artist(Base):
             result = hook(result)
         return result
     
+    def draw_and_get_masks(self) -> tuple[np.ndarray, MaskHandler]:
+        """Perform all of the actions in the drawing queue on the source image and return the result.
+        """
+        import inspect
+        result = self._img.copy()
+
+        maskHandler = MaskHandler()
+        for i, hook in enumerate(self._drawQueue):
+            funcArgs: list[str] = inspect.getfullargspec(hook.func).args
+            if 'refMask' in funcArgs and i in self._maskSettingDict:
+                mask = Mask(setting=self._maskSettingDict[i])
+                result = hook(result, refMask=mask)
+                # maskHandler.append(mask)
+                maskHandler.process(mask)
+                # TODO: Process occlusion
+            elif 'maskHandler' in funcArgs:
+                result = hook(result, maskHandler=maskHandler)
+            elif i in self._maskSettingDict:
+                print(f"TODO: Implement refMask for {hook.func.__qualname__}")
+                result = hook(result)
+            else:
+                result = hook(result)
+        return result, maskHandler
+
     def draw_and_save(self, path: str):
         """Perform all of the actions in the drawing queue on the source image and save the result to a file.
         """

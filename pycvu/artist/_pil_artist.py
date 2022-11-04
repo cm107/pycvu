@@ -55,6 +55,8 @@ class PilArtist:
             text (str): The text that you would like to draw.
             position (tuple[float, float]): Where you would like to draw the text.
         """
+        if not self._artist.maskSetting.skip:
+            self._artist._maskSettingDict[len(self._artist._drawQueue)] = self._artist.maskSetting.copy()
         self._artist._drawQueue.append(
             partial(
                 PilUtil.text,
@@ -71,6 +73,8 @@ class PilArtist:
     def hanko(
         self, text: str, position: VectorVar | PilImageVectorCallback
     ) -> Artist:
+        if not self._artist.maskSetting.skip:
+            self._artist._maskSettingDict[len(self._artist._drawQueue)] = self._artist.maskSetting.copy()
         self._artist._drawQueue.append(
             partial(
                 PilUtil.hanko,

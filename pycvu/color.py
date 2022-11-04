@@ -1,13 +1,19 @@
 from __future__ import annotations
-import colorsys
+import cv2
+import numpy as np
+import numpy.typing as npt
 from .base import Base
 
 def clamp(value: float, minVal: float, maxVal: float) -> float:
     return max(min(value, minVal), maxVal)
 
 class Color(Base):
-    def __init__(self, r: float=0, g: float=0, b: float=0, a: float=255, _scale: float=255):
-        self.r = r; self.g = g; self.b = b; self.a = a
+    def __init__(self, r: float=0, g: float=0, b: float=0, a: float=None, _scale: float=255):
+        self.r = r; self.g = g; self.b = b
+        if a is None:
+            self.a = _scale
+        else:
+            self.a = a
         self._scale = _scale
 
     def __str__(self) -> str:
@@ -41,8 +47,9 @@ class Color(Base):
         self._scale = value
 
     def rescale(self, newScale: float) -> Color:
-        self.scale = newScale
-        return self
+        color = self.deepcopy()
+        color.scale = newScale
+        return color
 
     @property
     def rgb(self) -> tuple[float, float, float]:
@@ -85,7 +92,7 @@ class Color(Base):
     @classmethod
     @property
     def blue(cls) -> Color:
-        return cls(0, 255, 0)
+        return cls(0, 0, 255)
 
     @classmethod
     @property
@@ -96,6 +103,41 @@ class Color(Base):
     @property
     def white(cls) -> Color:
         return cls(255, 255, 255)
+
+    def sample_img(self, shape: tuple) -> npt.NDArray[np.uint8]:
+        img = np.zeros(shape, dtype=np.uint8)
+        img[:,:] = self.bgr
+        return img
+
+    @property
+    def preview_img(self) -> npt.NDArray[np.uint8]:
+        return self.sample_img((500, 500, 3))
+
+    @property
+    def distant_color_sample(self) -> Color:
+        hsv = self.to_hsv()
+        if hsv.s == 0:
+            hsv.s = 1
+            hsv.v = 1 - hsv.v
+        return hsv.rotate(180).to_color()
+
+    def preview(self):
+        cv2.imshow('preview', self.preview_img)
+        cv2.waitKey(3000)
+        cv2.destroyAllWindows()
+    
+    @staticmethod
+    def debug():
+        color0 = Color(10, 123, 174)
+        color1 = color0.distant_color_sample
+        print(f"{color0=}, {color1=}")
+        preview = np.concatenate(
+            [color0.preview_img, color1.preview_img],
+            axis=1, dtype=np.uint8
+        )
+        cv2.imshow('preview', preview)
+        cv2.waitKey(3000)
+        cv2.destroyAllWindows()
 
 class HSV(Base):
     def __init__(self, h: float, s: float, v: float):
@@ -110,6 +152,12 @@ class HSV(Base):
     
     def __str__(self) -> str:
         return f"{type(self).__name__}({self.h},{self.s},{self.v})"
+
+    def rotate(self, angle: float) -> HSV:
+        return HSV(
+            h=(self.h + angle) % 360,
+            s=self.s, v=self.v
+        )
 
     def to_color(self) -> Color:
         """
