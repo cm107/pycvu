@@ -43,6 +43,26 @@ class Interval(Base, Generic[TV]):
         self.valMin = valMin
         self.valMax = valMax
 
+    def contains(self, value: TV) -> bool:
+        assert type(self.valMin) is type(value)
+        if type(value) in T.__constraints__:
+            return self.valMin <= value <= self.valMax
+        elif type(value) in TV.__constraints__:
+            def _contains(value: TV, attrList: list[str]) -> bool:
+                return all([getattr(self.valMin, attr) <= getattr(value, attr) <= getattr(self.valMax, attr) for attr in attrList])
+            
+            if type(value) is Vector:
+                return _contains(value, ['x', 'y'])
+            elif type(value) is Color:
+                assert self.valMin.scale == value.scale
+                return _contains(value, ['r', 'g', 'b', 'a'])
+            elif type(value) is HSV:
+                return _contains(value, ['h', 's', 'v'])
+            else:
+                raise Exception
+        else:
+            raise TypeError
+
     @property
     def generic_type(self) -> type: # Note: Can't be called from __init__
         return self.__orig_class__.__args__[0]
@@ -111,4 +131,11 @@ class Interval(Base, Generic[TV]):
         for i in range(10):
             print(f"\t{i}: {colorInterval.random()=}")
         
+        assert Interval[Vector[float]](Vector[float](0,0), Vector[float](10,10)).contains(Vector[float](5,5))
+        assert not Interval[Vector[float]](Vector[float](0,0), Vector[float](10,10)).contains(Vector[float](15,15))
+        assert Interval[Color](Color(0,0,0), Color(100, 100, 100)).contains(Color(50, 50, 50))
+        assert not Interval[Color](Color(0,0,0), Color(100, 100, 100)).contains(Color(150, 150, 150))
+        assert Interval[HSV](HSV(0, 0, 0), HSV(100, 0.5, 0.5)).contains(HSV(50, 0.1, 0.1))
+        assert not Interval[HSV](HSV(0, 0, 0), HSV(100, 0.5, 0.5)).contains(HSV(50, 0.6, 0.1))
+
         print(f"Test passed")

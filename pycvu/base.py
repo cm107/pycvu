@@ -117,7 +117,7 @@ class BaseUtil:
             )
     
     @staticmethod
-    def from_func_dict(func_dict: dict) -> Callable | partial:
+    def from_func_dict(func_dict: dict, **kwargs) -> Callable | partial:
         module = importlib.import_module(func_dict['_funcModule'])
         attrSequence = func_dict['_funcQualname'].split('.')
         attr = getattr(module, attrSequence[0])
@@ -129,11 +129,14 @@ class BaseUtil:
             keywords: dict = {}
             for key, val in func_dict['_keywords'].items():
                 if type(val) is dict and '_funcModule' in val:
-                    keywords[key] = BaseUtil.from_func_dict(val)
+                    keywords[key] = BaseUtil.from_func_dict(val, **kwargs)
                 elif type(val) is dict:
                     assert '_typedict' in val
                     objCls = BaseUtil.from_type_dict(val['_typedict'])
-                    if hasattr(objCls, 'from_dict'):
+                    if objCls is ContextVarRef:
+                        assert 'context' in kwargs
+                        obj = ContextVarRef.from_dict(val, context=kwargs['context'])
+                    elif hasattr(objCls, 'from_dict'):
                         obj = objCls.from_dict(val)
                     else:
                         obj = objCls(**{key0: val0 for key0, val0 in val.items() if key0 != '_typedict'})
@@ -412,20 +415,20 @@ class BaseHandler(Generic[T]):
     def get_constructor_params(cls) -> list[str]:
         return [param for param in list(inspect.signature(cls.__init__).parameters.keys()) if param != 'self']
 
-    def _to_dict_compressed(self) -> dict:
-        cls_typedict: dict = BaseUtil.to_type_dict(self)
+    def _to_dict_compressed(self, **kwargs) -> dict:
+        _typedict: dict = BaseUtil.to_type_dict(self)
         obj_typedict: dict = BaseUtil.to_type_dict(self[0]) if len(self) > 0 else None
-        if '_args' in cls_typedict:
-            del cls_typedict['_args']
+        if '_args' in _typedict:
+            del _typedict['_args']
 
-        item_dict: dict = dict(cls_typedict=cls_typedict, obj_typedict=obj_typedict)
+        item_dict: dict = dict(_typedict=_typedict, obj_typedict=obj_typedict)
         for key, val in self.__dict__.items():
             if key == '__orig_class__':
                 continue
             if key == '_objects':
                 workingDictList: list[dict] = []
                 for val0 in val:
-                    workingDict = val0.to_dict()
+                    workingDict = val0.to_dict(**kwargs)
                     assert '_typedict' in workingDict
                     del workingDict['_typedict']
                     workingDictList.append(workingDict)
@@ -436,20 +439,20 @@ class BaseHandler(Generic[T]):
                 item_dict[key] = val
         return item_dict
 
-    def _to_dict_expanded(self) -> dict:
-        cls_typedict: dict = BaseUtil.to_type_dict(self)
+    def _to_dict_expanded(self, **kwargs) -> dict:
+        _typedict: dict = BaseUtil.to_type_dict(self)
         # obj_typedict: dict = BaseUtil.to_type_dict(self[0]) if len(self) > 0 else None
-        if '_args' in cls_typedict:
-            del cls_typedict['_args']
+        if '_args' in _typedict:
+            del _typedict['_args']
 
-        item_dict: dict = dict(_typedict=cls_typedict)
+        item_dict: dict = dict(_typedict=_typedict)
         for key, val in self.__dict__.items():
             if key == '__orig_class__':
                 continue
             if key == '_objects':
                 workingDictList: list[dict] = []
                 for val0 in val:
-                    workingDict = val0.to_dict()
+                    workingDict = val0.to_dict(**kwargs)
                     assert '_typedict' in workingDict
                     # del workingDict['_typedict']
                     workingDictList.append(workingDict)
@@ -462,24 +465,24 @@ class BaseHandler(Generic[T]):
 
     def to_dict(self, compressed: bool=True, **kwargs) -> dict:
         if compressed:
-            return self._to_dict_compressed()
+            return self._to_dict_compressed(**kwargs)
         else:
-            return self._to_dict_expanded()
+            return self._to_dict_expanded(**kwargs)
 
     @classmethod
     def _from_dict_compressed(cls, item_dict: dict):
-        assert 'cls_typedict' in item_dict
+        assert '_typedict' in item_dict
         assert 'obj_typedict' in item_dict
-        cls_typedict = item_dict['cls_typedict']
+        _typedict = item_dict['_typedict']
         obj_typedict = item_dict['obj_typedict']
-        cls_type = BaseUtil.from_type_dict(cls_typedict)
+        cls_type = BaseUtil.from_type_dict(_typedict)
         obj_type = BaseUtil.from_type_dict(obj_typedict)
 
         constructor_params = cls.get_constructor_params()
         constructor_dict = {}
         post_construction_dict = {}
         for key, val in item_dict.items():
-            if key in ['cls_typedict', 'obj_typedict']:
+            if key in ['_typedict', 'obj_typedict']:
                 continue
             if key == '_objects':
                 assert type(val) is list
@@ -627,6 +630,8 @@ class BaseHandler(Generic[T]):
         else:
             raise Exception(f"Invalid file extension: {ext}")
 
+H = TypeVar('H', bound=BaseHandler) # H can only be BaseHandler or a subtype of BaseHandler
+
 class BaseObject(Base):
     def __init__(self):
         super().__init__()
@@ -659,50 +664,81 @@ class BaseObjectHandler(BaseHandler[OBJ]):
         item_dict['id'] = uuid.UUID(item_dict['id'])
         return super().from_dict(item_dict, **kwargs)
 
-class InnerDummyObj(BaseObject):
-    def __init__(self, name: str='Name', count: int=0):
-        super().__init__()
-        self.name = name
-        self.count = count
+OBJ_H = TypeVar('OBJ_H', bound=BaseObjectHandler)
 
-class DummyObj(BaseObject):
-    def __init__(self, a: int, b: int, inner: InnerDummyObj=None):
-        super().__init__()
-        self.a = a; self.b = b
-        self.inner = inner if inner is not None else InnerDummyObj()
+ContextVar = T | H | OBJ | OBJ_H
 
-    @staticmethod
-    def debug():
-        
-        obj = DummyObj(1, 2)
-        print(f"{obj.to_dict()=}")
-        print(f"{obj=}")
-        obj0 = DummyObj.from_dict(obj.to_dict())
-        assert type(obj0.inner) is InnerDummyObj
-        print(f"{obj0=}")
-
-class DummyOuter(BaseObject):
-    def __init__(self, msg: str='Hello'):
-        super().__init__()
-        self.msg = msg
-
-class DummyObjHandler(BaseObjectHandler[DummyObj]):
-    def __init__(self, _objects: list[DummyObj]=None, dummyOuter: DummyOuter=None):
-        super().__init__(_objects)
-        self.dummyOuter = dummyOuter if dummyOuter is not None else DummyOuter()
+class Context:
+    """
+    The goal of this class is to make it possible for a single serialized variable can be referenced in multiple places.
+    For example, we could define a LoadableImageMaskHandler and use it to randomly overlay an image on a working image.
+    We may then decide to use the same LoadableImageMaskHandler instance to randomly overlay another image on the working image after doing a rotation.
+    When we serialize the two calls to the overlay_image function, we would need to serialize the LoadableImageMaskHandler instance as well.
+    Without a context, we would end up serializing the same instance twice, resulting in a larger dump file.
+    In order to mitigate this problem, instead of serializing the LoadableImageMaskHandler directly in the overlay_image function callback,
+    we could serialize it in the context and reference a unique id in the overlay_image function callback instead. 
+    """
+    def __init__(self, _vars: dict[uuid.UUID, ContextVar]=None):
+        self._vars: dict[uuid.UUID, ContextVar] = _vars if _vars is not None else {}
     
-    @staticmethod
-    def debug():
-        handler = DummyObjHandler(
-            _objects=[
-                DummyObj(1, 2, InnerDummyObj('Fred', 5)),
-                DummyObj(1, 2, None)
-            ],
-            dummyOuter=DummyOuter('How are you?')
+    def to_dict(self) -> dict:
+        return dict(
+            _typedict=BaseUtil.to_type_dict(type(self)),
+            _vars={
+                key.hex: val.to_dict()
+                for key, val in self._vars.items()
+            }
         )
-        handler0 = DummyObjHandler.from_dict(handler.to_dict())
-        print(f"{handler.to_dict()=}")
-        print(f"{handler0.to_dict()=}")
-        handler0.save('debug_test.json')
-        handler1 = DummyObjHandler.load('debug_test.json')
-        print(f"{handler1.to_dict()=}")
+
+    @classmethod
+    def from_dict(cls, item_dict: dict) -> Context:
+        _vars: dict[uuid.UUID, ContextVar] = {}
+        for key, val in item_dict['_vars'].items():
+            assert type(val) is dict and '_typedict' in val
+            cls_type = BaseUtil.from_type_dict(val['_typedict'])
+            assert hasattr(cls_type, 'from_dict')
+            cls_obj = cls_type.from_dict(val)
+            _vars[uuid.UUID(key)] = cls_obj
+        return Context(_vars=_vars)
+
+    def register_variable(self, var: ContextVar) -> ContextVarRef:
+        varId = uuid.uuid4()
+        self._vars[varId] = var
+        return ContextVarRef(varId=varId, context=self)
+    
+    def unregister_variable(self, value: uuid.UUID | ContextVarRef):
+        if type(value) is uuid.UUID:
+            varId = value
+        elif type(value) is ContextVarRef:
+            varId = value.varId
+        else:
+            raise TypeError
+        del self._vars[varId]
+    
+    def clear(self):
+        self._vars.clear()
+
+class ContextVarRef:
+    """This is a reference to a variable in the context.
+    It is meant to be used together with an existing context.
+    """
+    def __init__(self, varId: uuid.UUID, context: Context):
+        self.varId = varId
+        self.context = context
+
+    def to_dict(self) -> dict:
+        return dict(
+            _typedict=BaseUtil.to_type_dict(type(self)),
+            varId=self.varId.hex
+        )
+
+    @classmethod
+    def from_dict(cls, item_dict: dict, context: Context) -> ContextVarRef:
+        return ContextVarRef(
+            varId=uuid.UUID(item_dict['varId']),
+            context=context
+        )
+
+    @property
+    def value(self) -> ContextVar:
+        return self.context._vars[self.varId]

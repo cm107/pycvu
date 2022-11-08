@@ -6,27 +6,37 @@ import types
 import cv2
 import numpy as np
 
-from pycvu.base import BaseUtil, Base
-
+from pycvu.base import BaseUtil, Base, Context, ContextVarRef
 from ..color import Color
 from ..mask import MaskSetting, Mask, MaskHandler
 from ..vector import Vector
 from ..util import CvUtil, \
     VectorVar, ImageVectorCallback, ColorVar, \
-    IntVar, FloatVar, StringVar, DrawCallback, RepeatDrawCallback
+    IntVar, FloatVar, StringVar, ImageVar, \
+    DrawCallback, RepeatDrawCallback, \
+    LoadableImageMask, LoadableImageMaskHandler
 
 __all__ = [
     "Artist"
 ]
 
 """
-* What next? Refer to Kume's logic.
+What next? Refer to Kume's logic.
+* Load labels from symbol folder. Need method for getting mask from black and white image.
+    * It looks like these 'labels' (bad naming) are actually images with pre-calculated masks.
+    * Kume was pasting them on top of the working image and working mask at a random location/rotation.
+* range_noise?
+    * It looks like this is just adding a random integer (usually small) to all pixels in the image. This doesn't affect the mask.
+* n_merge
+    * Not sure what the point of this is. I guess he wanted some of the drawing methods to be omitted sometimes.
 """
 
 from ..vector import Vector
 
 
 class Artist(Base):
+    context: Context = Context()
+
     color: ColorVar = Color(255, 255, 255)
     """Color used when drawing anything."""
 
@@ -124,7 +134,7 @@ class Artist(Base):
             set_meta(artist.__class__, item_dict['meta']['cv'])
             set_meta(artist.pil.__class__, item_dict['meta']['pil'])
         
-        artist._drawQueue = artist._unserialize_queue(item_dict['_drawQueue'])
+        artist._drawQueue = artist._unserialize_queue(item_dict['_drawQueue'], context=cls.context)
         artist._maskSettingDict = {int(idx): MaskSetting.from_dict(maskSetting) for idx, maskSetting in item_dict['_maskSettingDict'].items()}
         return artist
 
@@ -308,6 +318,32 @@ class Artist(Base):
             p = RepeatDrawCallback(p, repeat=repeat)
         self._drawQueue.append(p)
 
+    def overlay_image(
+        self, foreground: ImageVar,
+        position: VectorVar | ImageVectorCallback,
+        repeat: int=1
+    ) -> Artist:
+        maskCompatibleTypes = [LoadableImageMask, LoadableImageMaskHandler]
+        if (
+            not self.maskSetting.skip
+            and (
+                type(foreground) in maskCompatibleTypes
+                or (
+                    type(foreground) is ContextVarRef
+                    and type(foreground.value) in maskCompatibleTypes
+                )
+            )
+        ):
+            self._maskSettingDict[len(self._drawQueue)] = self.maskSetting.copy()
+        p = partial(
+            CvUtil.overlay_image,
+            foreground=foreground,
+            position=position
+        )
+        if repeat > 1:
+            p = RepeatDrawCallback(p, repeat=repeat)
+        self._drawQueue.append(p)
+
     @overload
     def resize(self, dsize: VectorVar) -> Artist:
         """Resizes the working image to the given target size.
@@ -366,20 +402,25 @@ class Artist(Base):
             else:
                 h = hook
             funcArgs: list[str] = inspect.getfullargspec(h.p.func).args
-            if 'refMask' in funcArgs and i in self._maskSettingDict:
-                for i in range(h.repeat):
+            if 'refMask' in funcArgs and i in self._maskSettingDict and 'maskHandler' in funcArgs:
+                for j in range(h.repeat):
+                    mask = Mask(setting=self._maskSettingDict[i])
+                    result = h.p(result, refMask=mask, maskHandler=maskHandler)
+                    maskHandler.process(mask)
+            elif 'refMask' in funcArgs and i in self._maskSettingDict:
+                for j in range(h.repeat):
                     mask = Mask(setting=self._maskSettingDict[i])
                     result = h.p(result, refMask=mask)
                     maskHandler.process(mask)
             elif 'maskHandler' in funcArgs:
-                for i in range(h.repeat):
+                for j in range(h.repeat):
                     result = h.p(result, maskHandler=maskHandler)
             elif i in self._maskSettingDict:
                 print(f"TODO: Implement refMask for {hook.func.__qualname__}")
-                for i in range(h.repeat):
+                for j in range(h.repeat):
                     result = h.p(result)
             else:
-                for i in range(h.repeat):
+                for j in range(h.repeat):
                     result = hook(result)
         return result, maskHandler
 
@@ -397,14 +438,14 @@ class Artist(Base):
                 result.append(BaseUtil.to_func_dict(p))
         return result
 
-    def _unserialize_queue(self, serializedQueue: list[dict]) -> list[DrawCallback]:
+    def _unserialize_queue(self, serializedQueue: list[dict], **kwargs) -> list[DrawCallback]:
         queue: list[DrawCallback] = []
         for pDict in serializedQueue:
             if '_typedict' in pDict:
                 assert pDict['_typedict']['_qualname'] == RepeatDrawCallback.__name__
-                queue.append(RepeatDrawCallback.from_dict(pDict))
+                queue.append(RepeatDrawCallback.from_dict(pDict, **kwargs))
             else:
-                queue.append(BaseUtil.from_func_dict(pDict))
+                queue.append(BaseUtil.from_func_dict(pDict, **kwargs))
         return queue
 
-    from ._debug import debug
+    from ._debug import debug, debug_loop

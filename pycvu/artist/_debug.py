@@ -1,9 +1,12 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING, Callable, Type
 import cv2
+import os
+from shutil import rmtree
 import numpy as np
 
-from pycvu.util import CvUtil, PilUtil
+from pycvu.util import CvUtil, PilUtil, \
+    LoadableImageMask, LoadableImageMaskHandler
 from ..vector import Vector
 from ..color import Color, HSV
 from ..interval import Interval
@@ -13,7 +16,19 @@ if TYPE_CHECKING:
 
 @classmethod
 def debug(cls: Type[Artist]):
-    cls.maskSetting.track = True; cls.maskSetting.canBeOccluded = True; cls.maskSetting.canOcclude = True
+    cls.maskSetting.track = False; cls.maskSetting.canBeOccluded = True; cls.maskSetting.canOcclude = True
+
+    imgHandlerPath = "imgHandler.json"
+    if not os.path.isfile(imgHandlerPath):
+        imgHandler = LoadableImageMaskHandler.from_wildcard(
+            "symbol/*.png",
+            Interval[HSV](HSV(0,0,0), HSV(359.9, 1, 0.9))
+        )
+        imgHandler.load_data()
+        imgHandler.save(imgHandlerPath, includeData=True)
+    else:
+        imgHandler = LoadableImageMaskHandler.load(imgHandlerPath)
+    imgHandlerRef = cls.context.register_variable(imgHandler)
 
     colorInterval: Interval[Color] = Interval[Color](Color.black, Color.white)
 
@@ -70,13 +85,17 @@ def debug(cls: Type[Artist]):
     drawer.text("Hello World!", org=(100, 100))
     drawer.text("Hello World!", org=(100, 200), bottomLeftOrigin=True)
 
+    cls.maskSetting.track = True
     drawer.pil.text(text="荒唐無稽", position=(300, 300))
-    
+    cls.maskSetting.track = False
+
     cls.color = Color(255, 0, 0)
     cls.PIL.fontSize = 50
     cls.PIL.hankoOutlineWidth = 10
     cls.PIL.hankoMarginRatio = 0.1
+    cls.maskSetting.track = True
     drawer.pil.hanko(text="合格", position=(300, 300+200))
+    cls.maskSetting.track = False
 
     cls.color = Interval[HSV](HSV(0, 0.9375, 0.5), HSV(359.9, 1.0, 1.0))
     positionCallback = CvUtil.Callback.get_position_interval
@@ -106,6 +125,10 @@ def debug(cls: Type[Artist]):
     #     )
     #     drawer.pil.hanko(text=textGen, position=PilUtil.Callback.get_position_interval)
 
+    cls.maskSetting.track = True
+    drawer.overlay_image(imgHandlerRef, position=positionCallback, repeat=2)
+    cls.maskSetting.track = False
+
     drawer.line(pt1=positionCallback, pt2=positionCallback, repeat=10)
     drawer.rectangle(pt1=positionCallback, pt2=positionCallback, fill=False, repeat=10)
     drawer.ellipse(
@@ -119,7 +142,9 @@ def debug(cls: Type[Artist]):
     cls.PIL.fontSize = Interval[int](5, 40)
     cls.PIL.hankoOutlineWidth = Interval[int](1, 5)
     cls.PIL.hankoMarginRatio = Interval[float](0.1, 0.5)
+    cls.maskSetting.track = True
     drawer.pil.hanko(text=textGen, position=PilUtil.Callback.get_position_interval, repeat=10)
+    cls.maskSetting.track = False
 
     drawer.save('/tmp/artistDebugSave.json', saveImg=False, saveMeta=True)
     del drawer
@@ -129,14 +154,45 @@ def debug(cls: Type[Artist]):
 
     from ..polygon import Segmentation
 
-    maskHandler.show_preview()
-    # for mask in maskHandler:
-    #     if mask._mask.sum() == 0:
-    #         continue
-    #     mask.show_preview(showBBox=True, showContours=True, minNumPoints=6)
-    #     seg = Segmentation.from_contours(mask.contours)
-    #     # print(f"{seg.to_coco()=}")
+    previewDump = 'previewDump'
+    if os.path.isdir(previewDump):
+        rmtree(previewDump)
+    os.makedirs(previewDump, exist_ok=True)
+    cv2.imwrite(f"{previewDump}/result.png", result)
+    cv2.imwrite(f"{previewDump}/maskPreview.png", maskHandler.preview)
+    for i, mask in enumerate(maskHandler):
+        if mask._mask.sum() == 0:
+            continue
+        maskImg = mask.get_preview(showBBox=True, showContours=True, minNumPoints=6)
+        numStr = str(i)
+        while len(numStr) < 2:
+            numStr = f"0{numStr}"
+        cv2.imwrite(f"{previewDump}/mask{numStr}.png", maskImg)
 
-    cv2.imshow('debug', result)
-    cv2.waitKey(3000)
-    cv2.destroyAllWindows()
+@classmethod
+def debug_loop(cls: Type[Artist], n: int=1):
+    img = np.zeros((500, 500, 3), dtype=np.uint8)
+    drawer = cls.load('/tmp/artistDebugSave.json', img=img.copy(), loadMeta=True)
+
+    previewLoopDump = 'previewLoopDump'
+    if os.path.isdir(previewLoopDump):
+        rmtree(previewLoopDump)
+    os.makedirs(previewLoopDump, exist_ok=True)
+
+    for k in range(n):
+        result, maskHandler = drawer.draw_and_get_masks()
+
+        previewDump = f'{previewLoopDump}/previewDump{k}'
+        if os.path.isdir(previewDump):
+            rmtree(previewDump)
+        os.makedirs(previewDump, exist_ok=True)
+        cv2.imwrite(f"{previewDump}/result.png", result)
+        cv2.imwrite(f"{previewDump}/maskPreview.png", maskHandler.preview)
+        for i, mask in enumerate(maskHandler):
+            if mask._mask.sum() == 0:
+                continue
+            maskImg = mask.get_preview(showBBox=True, showContours=True, minNumPoints=6)
+            numStr = str(i)
+            while len(numStr) < 2:
+                numStr = f"0{numStr}"
+            cv2.imwrite(f"{previewDump}/mask{numStr}.png", maskImg)

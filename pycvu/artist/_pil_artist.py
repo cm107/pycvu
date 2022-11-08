@@ -6,7 +6,7 @@ from pycvu.interval import Interval
 from ..vector import Vector
 import pycvu
 
-from ..util import Util, PilUtil, \
+from ..util import Convert, PilUtil, \
     VectorVar, PilImageVectorCallback, \
     IntVar, FloatVar, StringVar, \
     DrawCallback, RepeatDrawCallback
@@ -36,11 +36,11 @@ class PilArtist:
     def _pillow_decorator(method):
         def _inner(ref: PilArtist, *args, **kwargs):
             ref._artist._drawQueue.append(
-                partial(Util.cv_to_pil)
+                partial(Convert.cv_to_pil)
             )
             ref = method(ref, *args, **kwargs)
             ref._artist._drawQueue.append(
-                partial(Util.pil_to_cv)
+                partial(Convert.pil_to_cv)
             )
             return ref
         return _inner
@@ -64,7 +64,7 @@ class PilArtist:
             text=text,
             fontPath=PilArtist.fontPath,
             fontSize=PilArtist.fontSize,
-            color=Util.bgr_to_rgb(self._artist.color),
+            color=Convert.bgr_to_rgb(self._artist.color),
             position=position
         )
         if repeat > 1:
@@ -83,7 +83,7 @@ class PilArtist:
             PilUtil.hanko,
             text=text,
             fontPath=PilArtist.fontPath, fontSize=PilArtist.fontSize,
-            color=Util.bgr_to_rgb(self._artist.color),
+            color=Convert.bgr_to_rgb(self._artist.color),
             position=position,
             direction='ttb' if PilArtist.hankoIsVertical else 'ltr',
             outlineWidth=PilArtist.hankoOutlineWidth,

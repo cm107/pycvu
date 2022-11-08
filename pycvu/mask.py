@@ -67,17 +67,9 @@ class Mask(Base):
     @property
     def contours(self):
         contours, _   = cv2.findContours(self._mask.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-        # print(f"{contours=}")
-        # print(f"{type(contours)=}") # tuple (polygons)
-        # print(f"{type(contours[0])=}, {contours[0]=}, {contours[0].dtype=}") # np.ndarray (polygon)
-        # print(f"{type(contours[0][0])=}, {contours[0][0]=}") # np.ndarray (coordinate outer)
-        # if len(contours[0][0]) > 0:
-        #     print(f"{type(contours[0][0][0])=}, {contours[0][0][0]}") # np.ndarray (coordinate inner)
-        # if len(contours[0][0][0]) > 0:
-        #     print(f"{type(contours[0][0][0][0])=}") # np.int32
         return contours
 
-    def show_preview(self, showBBox: bool=False, showContours: bool=False, minNumPoints: int=None):
+    def get_preview(self, showBBox: bool=False, showContours: bool=False, minNumPoints: int=None) -> npt.NDArray[np.uint8]:
         assert self._mask is not None, f"_mask isn't initialized yet"
         maskImg = np.zeros(tuple(list(self._mask.shape) + [3]))
         maskImg[self._mask] = (255, 255, 255)
@@ -99,6 +91,14 @@ class Mask(Base):
                 seg = Segmentation.from_contours(self.contours)
                 seg = seg.prune(lambda poly: len(poly) < minNumPoints)
                 maskImg = cv2.drawContours(maskImg, seg.to_contours(), -1, (255, 0, 0), 2)
+        return maskImg
+
+    @property
+    def preview(self) -> npt.NDArray[np.uint8]:
+        return self.get_preview()
+
+    def show_preview(self, showBBox: bool=False, showContours: bool=False, minNumPoints: int=None):
+        maskImg = self.get_preview(showBBox=showBBox, showContours=showContours, minNumPoints=minNumPoints)
 
         cv2.imshow('mask preview', maskImg)
         cv2.waitKey(3000)
@@ -123,7 +123,8 @@ class MaskHandler(BaseHandler[Mask]):
         if mask.track:
             self.append(mask)
 
-    def show_preview(self):
+    @property
+    def preview(self) -> npt.NDArray[np.uint8]:
         _mask: npt.NDArray[np.bool_] = None
         for mask in self:
             assert mask._mask is not None, f"_mask isn't initialized yet"
@@ -133,6 +134,9 @@ class MaskHandler(BaseHandler[Mask]):
                 _mask |= mask._mask
         maskImg = np.zeros(tuple(list(_mask.shape) + [3]))
         maskImg[_mask] = (255, 255, 255)
-        cv2.imshow('mask preview', maskImg)
+        return maskImg
+
+    def show_preview(self):
+        cv2.imshow('mask preview', self.preview)
         cv2.waitKey(3000)
         cv2.destroyAllWindows()
