@@ -186,7 +186,7 @@ class CvUtil:
     
     def text(
         img: np.ndarray, text: StringVar,
-        org: VectorVar,
+        org: VectorVar | ImageVectorCallback,
         fontFace: int=cv2.FONT_HERSHEY_SIMPLEX,
         fontScale: FloatVar=1,
         color: ColorVar = (255, 255, 255),
@@ -195,6 +195,8 @@ class CvUtil:
         refMask: Mask=None
     ) -> np.ndarray:
         text = Convert.cast_str(text)
+        if callable(org):
+            org = org(img)
         org = Convert.cast_vector(org)
         fontScale = Convert.cast_builtin(fontScale)
         color = Convert.cast_color(color)

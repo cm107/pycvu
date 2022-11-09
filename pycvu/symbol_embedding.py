@@ -59,15 +59,15 @@ class Label(Base):
         path = paths[0]
         self.img = cv2.imread(path, cv2.IMREAD_UNCHANGED)[:,:,:3]
         self.mask = KumeEmbedding.get_mask(self.img, self.thre)
-        print(f"{self.img.shape=}, {self.img.dtype=}")
-        print(f"{self.mask.shape=}, {self.mask.dtype=}")
+        # print(f"{self.img.shape=}, {self.img.dtype=}")
+        # print(f"{self.mask.shape=}, {self.mask.dtype=}")
         maskImg = np.zeros_like(self.img)
         maskImg[self.mask > 0] = (0, 0, 255)
 
-        preview = np.concatenate([self.img, maskImg], axis=0, dtype=np.uint8)
-        cv2.imshow('preview', preview)
-        cv2.waitKey(3000)
-        cv2.destroyAllWindows()
+        # preview = np.concatenate([self.img, maskImg], axis=0, dtype=np.uint8)
+        # cv2.imshow('preview', preview)
+        # cv2.waitKey(3000)
+        # cv2.destroyAllWindows()
 
     @classmethod
     @property

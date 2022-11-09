@@ -11,7 +11,7 @@ from pycvu.interval import Interval
 from ..base import ContextVarRef
 from ..color import Color, HSV
 from ..vector import Vector
-from ..text_generator import TextGenerator
+from ..text_generator import TextGenerator, TextSampler
 from ._var import *
 from ._loadable_image import ImageVar, \
     LoadableImage, LoadableImageHandler, \
@@ -129,7 +129,7 @@ class Convert:
     def cast_str(value: StringVar) -> str:
         if type(value) is str:
             return value
-        elif type(value) is TextGenerator:
+        elif type(value) in [TextGenerator, TextSampler]:
             return value.random()
         else:
             raise TypeError

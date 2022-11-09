@@ -86,12 +86,12 @@ def debug(cls: Type[Artist]):
     drawer.text("Hello World!", org=(100, 200), bottomLeftOrigin=True)
 
     cls.maskSetting.track = True
-    drawer.pil.text(text="荒唐無稽", position=(300, 300))
+    drawer.pil.text(text="荒唐無稽", position=(300, 300), rotation=Interval[float](0, 359))
     cls.maskSetting.track = False
 
     cls.color = Color(255, 0, 0)
     cls.PIL.fontSize = 50
-    cls.PIL.hankoOutlineWidth = 10
+    cls.PIL.hankoOutlineWidthRatio = 0.1
     cls.PIL.hankoMarginRatio = 0.1
     cls.maskSetting.track = True
     drawer.pil.hanko(text="合格", position=(300, 300+200))
@@ -140,10 +140,14 @@ def debug(cls: Type[Artist]):
         fill=False, repeat=10
     )
     cls.PIL.fontSize = Interval[int](5, 40)
-    cls.PIL.hankoOutlineWidth = Interval[int](1, 5)
+    cls.PIL.hankoOutlineWidthRatio = Interval[float](0.05, 0.2)
     cls.PIL.hankoMarginRatio = Interval[float](0.1, 0.5)
     cls.maskSetting.track = True
-    drawer.pil.hanko(text=textGen, position=PilUtil.Callback.get_position_interval, repeat=10)
+    drawer.pil.hanko(
+        text=textGen, position=PilUtil.Callback.get_position_interval,
+        rotation=Interval[float](0, 360),
+        repeat=10
+    )
     cls.maskSetting.track = False
 
     drawer.save('/tmp/artistDebugSave.json', saveImg=False, saveMeta=True)
@@ -168,6 +172,10 @@ def debug(cls: Type[Artist]):
         while len(numStr) < 2:
             numStr = f"0{numStr}"
         cv2.imwrite(f"{previewDump}/mask{numStr}.png", maskImg)
+
+    cv2.imshow('result', result)
+    cv2.waitKey()
+    cv2.destroyAllWindows()
 
 @classmethod
 def debug_loop(cls: Type[Artist], n: int=1):

@@ -1,6 +1,6 @@
 from __future__ import annotations
 from functools import partial
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from pycvu.interval import Interval
 from ..vector import Vector
@@ -25,7 +25,7 @@ class PilArtist:
     """Path to the font used when drawing text."""
 
     hankoIsVertical: bool = True
-    hankoOutlineWidth: IntVar = 20
+    hankoOutlineWidthRatio: FloatVar = 0.1
     hankoMarginOffset: FloatVar = 0
     hankoMarginRatio: FloatVar = 0
 
@@ -49,6 +49,8 @@ class PilArtist:
     def text(
         self, text: StringVar,
         position: VectorVar | PilImageVectorCallback,
+        direction: Literal['rtl', 'ltr', 'ttb']='ltr',
+        rotation: FloatVar=0,
         repeat: int=1
     ) -> Artist:
         """Draws text on the image.
@@ -65,7 +67,9 @@ class PilArtist:
             fontPath=PilArtist.fontPath,
             fontSize=PilArtist.fontSize,
             color=Convert.bgr_to_rgb(self._artist.color),
-            position=position
+            position=position,
+            direction=direction,
+            rotation=rotation
         )
         if repeat > 1:
             p = RepeatDrawCallback(p, repeat=repeat)
@@ -74,7 +78,9 @@ class PilArtist:
     
     @_pillow_decorator
     def hanko(
-        self, text: StringVar, position: VectorVar | PilImageVectorCallback,
+        self, text: StringVar,
+        position: VectorVar | PilImageVectorCallback,
+        rotation: FloatVar=0,
         repeat: int=1
     ) -> Artist:
         if not self._artist.maskSetting.skip:
@@ -86,9 +92,10 @@ class PilArtist:
             color=Convert.bgr_to_rgb(self._artist.color),
             position=position,
             direction='ttb' if PilArtist.hankoIsVertical else 'ltr',
-            outlineWidth=PilArtist.hankoOutlineWidth,
+            outlineWidthRatio=PilArtist.hankoOutlineWidthRatio,
             marginOffset=PilArtist.hankoMarginOffset,
-            marginRatio=PilArtist.hankoMarginRatio
+            marginRatio=PilArtist.hankoMarginRatio,
+            rotation=rotation
         )
         if repeat > 1:
             p = RepeatDrawCallback(p, repeat=repeat)

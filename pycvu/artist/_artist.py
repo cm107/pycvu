@@ -22,13 +22,15 @@ __all__ = [
 
 """
 What next? Refer to Kume's logic.
-* Load labels from symbol folder. Need method for getting mask from black and white image.
-    * It looks like these 'labels' (bad naming) are actually images with pre-calculated masks.
-    * Kume was pasting them on top of the working image and working mask at a random location/rotation.
 * range_noise?
     * It looks like this is just adding a random integer (usually small) to all pixels in the image. This doesn't affect the mask.
 * n_merge
     * Not sure what the point of this is. I guess he wanted some of the drawing methods to be omitted sometimes.
+
+* OneOf
+* SomeOf
+
+I should probably start trying to match Kume's config.
 """
 
 from ..vector import Vector

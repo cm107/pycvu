@@ -10,7 +10,7 @@ from pycvu.interval import Interval
 
 from ..color import Color, HSV
 from ..vector import Vector
-from ..text_generator import TextGenerator
+from ..text_generator import TextGenerator, TextSampler
 from ..base import BaseUtil
 
 __all__ = [
@@ -25,7 +25,7 @@ __all__ = [
     "DrawCallback"
 ]
 
-StringVar = str | TextGenerator
+StringVar = str | TextGenerator | TextSampler
 VectorVar = tuple[int, int] | Vector | Interval
 ImageVectorCallback = Callable[[np.ndarray], VectorVar]
 PilImageVectorCallback = Callable[[pilImage.Image], VectorVar]
