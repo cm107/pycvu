@@ -1,6 +1,7 @@
 from __future__ import annotations
 import math
-from typing import overload, TYPE_CHECKING
+from typing import overload, TYPE_CHECKING, Callable
+from functools import partial
 import cv2
 import numpy as np
 import numpy.typing as npt
@@ -23,6 +24,57 @@ from ._mask import MaskUtil
 from ._loadable_image import ImageVar
 
 class CvUtil:
+    @staticmethod
+    def _apply_rotate(
+        img: npt.NDArray[np.uint8], rotation: float,
+        drawCallback: Callable[[np.ndarray], np.ndarray],
+        center: tuple[int, int]=None, autoCenter: bool=False
+    ) -> npt.NDArray[np.uint8]:
+        """
+        Refer to https://stackoverflow.com/a/73131334
+        """
+        tmp = np.zeros_like(img)
+        tmp = drawCallback(tmp)
+        h, w = tmp.shape[:2]
+        if center is None:
+            if not autoCenter:
+                center = (int(w/2), int(h/2))
+            else:
+                a = (tmp[:,:,0] + tmp[:,:,1] + tmp[:,:,2]) > 0
+                if a.sum() == 0:
+                    a = (tmp[:,:,0] + tmp[:,:,1] + tmp[:,:,2]) > 0
+                    assert a.sum() > 0, f"Failed to calculate alpha for autoCenter."
+                y, x = np.where(a)
+                cx = int(0.5 * (x.min() + x.max()))
+                cy = int(0.5 * (y.min() + y.max()))
+                center = (cx, cy)
+
+        sizeRotation: tuple[int, int] = (w, h)
+        affineMatrix = cv2.getRotationMatrix2D(center, rotation, 1)
+        tmp = cv2.warpAffine(tmp, affineMatrix, sizeRotation, flags=cv2.INTER_LINEAR, borderValue=(0, 0, 0))
+
+        # Does np.uint16 help reduce error?
+        tmp16 = tmp.astype(np.uint16)
+        if len(tmp16.shape) == 3:
+            alpha = (tmp16[:,:,0] + tmp16[:,:,1] + tmp16[:,:,2]) > 0
+        elif len(tmp16.shape) == 2:
+            alpha = tmp16 > 0
+        else:
+            raise Exception(f"Invalid shape: {tmp16.shape}")
+        alpha = alpha.astype(np.float32)
+        if len(tmp16.shape) == 3:
+            alpha = np.dstack((alpha, alpha, alpha))
+        elif len(tmp16.shape) == 2:
+            pass
+        else:
+            raise Exception
+        tmp = tmp.astype(np.float32)
+        img = img.astype(np.float32)
+        foreground = np.multiply(alpha, tmp)
+        np.subtract(1.0, alpha, out=alpha) # invert alpha
+        background = np.multiply(alpha, img)
+        return np.add(foreground, background).astype(np.uint8) # There are black edges in the result. Not sure what to do about that.
+
     @staticmethod
     def circle(
         img: np.ndarray,
@@ -92,6 +144,7 @@ class CvUtil:
         color: ColorVar,
         thickness: IntVar,
         lineType: int,
+        rotation: FloatVar=0,
         refMask: Mask=None
     ) -> np.ndarray:
         if callable(pt1):
@@ -102,15 +155,35 @@ class CvUtil:
         pt2 = Convert.cast_vector(pt2)
         color = Convert.cast_color(color)
         thickness = Convert.cast_builtin(thickness)
+        rotation = Convert.cast_builtin(rotation)
+
+        center = (int(0.5 * (pt1[0] + pt2[0])), int(0.5 * (pt1[1] + pt2[1])))
+
+        def drawCallback(img: np.ndarray, color: tuple) -> np.ndarray:
+            return cv2.rectangle(img, pt1, pt2, color, thickness, lineType)
 
         if refMask is not None:
             mask = np.zeros_like(img, dtype=np.uint8)
             maskColor = (255, 255, 255)
-            mask = cv2.rectangle(mask, pt1, pt2, maskColor, thickness, lineType)
+            # mask = cv2.rectangle(mask, pt1, pt2, maskColor, thickness, lineType)
+            if rotation != 0:
+                mask = CvUtil._apply_rotate(
+                    mask, rotation, partial(drawCallback, color=maskColor),
+                    center=center
+                )
+            else:
+                mask = drawCallback(mask, color=maskColor)
             mask = MaskUtil.eq_color(mask, color=maskColor)
             refMask._mask = mask
 
-        return cv2.rectangle(img, pt1, pt2, color, thickness, lineType)
+        # return cv2.rectangle(img, pt1, pt2, color, thickness, lineType)
+        if rotation != 0:
+            return CvUtil._apply_rotate(
+                img, rotation, partial(drawCallback, color=color),
+                center=center
+            )
+        else:
+            return drawCallback(img, color=color)
 
     @staticmethod
     def line(
@@ -192,6 +265,7 @@ class CvUtil:
         color: ColorVar = (255, 255, 255),
         thickness: IntVar=None,
         lineType: int=None, bottomLeftOrigin: bool=False,
+        rotation: FloatVar=0,
         refMask: Mask=None
     ) -> np.ndarray:
         text = Convert.cast_str(text)
@@ -201,19 +275,33 @@ class CvUtil:
         fontScale = Convert.cast_builtin(fontScale)
         color = Convert.cast_color(color)
         thickness = Convert.cast_builtin(thickness)
+        rotation = Convert.cast_builtin(rotation)
+
+        def drawCallback(img: np.ndarray, color: tuple) -> np.ndarray:
+            return cv2.putText(
+                img, text, org, fontFace, fontScale, color, thickness, lineType, bottomLeftOrigin
+            )
 
         if refMask is not None:
             mask = np.zeros_like(img, dtype=np.uint8)
             maskColor = (255, 255, 255)
-            mask = cv2.putText(
-                mask, text, org, fontFace, fontScale, maskColor, thickness, lineType, bottomLeftOrigin
-            )
+            # mask = cv2.putText(
+            #     mask, text, org, fontFace, fontScale, maskColor, thickness, lineType, bottomLeftOrigin
+            # )
+            if rotation != 0:
+                mask = CvUtil._apply_rotate(mask, rotation, partial(drawCallback, color=maskColor), autoCenter=True)
+            else:
+                mask = drawCallback(mask, color=maskColor)
             mask = MaskUtil.eq_color(mask, color=maskColor)
             refMask._mask = mask
 
-        return cv2.putText(
-            img, text, org, fontFace, fontScale, color, thickness, lineType, bottomLeftOrigin
-        )
+        # return cv2.putText(
+        #     img, text, org, fontFace, fontScale, color, thickness, lineType, bottomLeftOrigin
+        # )
+        if rotation != 0:
+            return CvUtil._apply_rotate(img, rotation, partial(drawCallback, color=color), autoCenter=True)
+        else:
+            return drawCallback(img, color=color)
 
     @overload
     @staticmethod
@@ -258,12 +346,14 @@ class CvUtil:
         img: npt.NDArray[np.uint8],
         foreground: ImageVar,
         position: VectorVar | ImageVectorCallback,
+        rotation: FloatVar=0,
         refMask: Mask=None, maskHandler: MaskHandler=None
     ) -> npt.NDArray[np.uint8]:
         foreground, mask = Convert.cast_image(foreground)
         if callable(position):
             position = position(img)
         position = Convert.cast_vector(position)
+        rotation = Convert.cast_builtin(rotation)
         bh, bw = img.shape[:2]
         fh, fw = foreground.shape[:2]
         x, y = position
@@ -274,19 +364,69 @@ class CvUtil:
         fgClampedBBox = BBox2D.Intersection(bgBbox, fgBbox)
         fgClampedBBoxZeroed = fgClampedBBox - fgClampedBBox.v0
 
-        result = img.copy()
         ry0 = fgClampedBBox.v0.y; ry1 = fgClampedBBox.v1.y
         rx0 = fgClampedBBox.v0.x; rx1 = fgClampedBBox.v1.x
         fy0 = fgClampedBBoxZeroed.v0.y; fy1 = fgClampedBBoxZeroed.v1.y
         fx0 = fgClampedBBoxZeroed.v0.x; fx1 = fgClampedBBoxZeroed.v1.x
-        result[ry0:ry1, rx0:rx1, :] = foreground[fy0:fy1, fx0:fx1, :]
-        if maskHandler is not None:
-            for maskObj in maskHandler:
-                assert maskObj._mask is not None
-                maskObj._mask[ry0:ry1, rx0:rx1] = False
-        if mask is not None and refMask is not None:
-            refMask._mask = np.zeros((bh, bw), dtype=np.bool_)
-            refMask._mask[ry0:ry1, rx0:rx1] = mask[fy0:fy1, fx0:fx1]
+
+        # result = img.copy()
+        # result[ry0:ry1, rx0:rx1, :] = foreground[fy0:fy1, fx0:fx1, :]
+        def drawCallback(img: np.ndarray, fg: np.ndarray, imgIdx: tuple, fgIdx: tuple) -> np.ndarray:
+            result = img.copy()
+            result[imgIdx] = fg[fgIdx]
+            return result
+        
+        if rotation != 0:
+            result = CvUtil._apply_rotate(
+                img, rotation,
+                partial(
+                    drawCallback, fg=foreground,
+                    imgIdx=np.index_exp[ry0:ry1, rx0:rx1, :],
+                    fgIdx=np.index_exp[fy0:fy1, fx0:fx1, :]
+                ),
+                center=tuple(fgClampedBBox.center)
+            )
+        else:
+            result = img.copy()
+            result[ry0:ry1, rx0:rx1, :] = foreground[fy0:fy1, fx0:fx1, :]
+
+        if rotation != 0:
+            if mask is not None and refMask is not None:
+                refMask._mask = np.zeros((bh, bw), dtype=np.uint8)
+                refMask._mask = CvUtil._apply_rotate(
+                    refMask._mask, rotation,
+                    partial(
+                        drawCallback,
+                        fg=mask.astype(np.uint8),
+                        imgIdx=np.index_exp[ry0:ry1, rx0:rx1],
+                        fgIdx=np.index_exp[fy0:fy1, fx0:fx1]
+                    ),
+                    center=tuple(fgClampedBBox.center)
+                ) > 0
+            if maskHandler is not None:
+                _mask = np.zeros(img.shape[:2], dtype=np.uint8)
+                _mask = CvUtil._apply_rotate(
+                    _mask, rotation,
+                    partial(
+                        drawCallback,
+                        fg=np.ones(img.shape[:2], dtype=np.uint8),
+                        imgIdx=np.index_exp[ry0:ry1, rx0:rx1],
+                        fgIdx=np.index_exp[fy0:fy1, fx0:fx1]
+                    ),
+                    center=tuple(fgClampedBBox.center)
+                )
+                _mask = _mask > 0
+                for maskObj in maskHandler:
+                    assert maskObj._mask is not None
+                    maskObj._mask[_mask] = False
+        else:
+            if mask is not None and refMask is not None:
+                refMask._mask = np.zeros((bh, bw), dtype=np.bool_)
+                refMask._mask[ry0:ry1, rx0:rx1] = mask[fy0:fy1, fx0:fx1]
+            if maskHandler is not None:
+                for maskObj in maskHandler:
+                    assert maskObj._mask is not None
+                    maskObj._mask[ry0:ry1, rx0:rx1] = False
         return result
 
     class Callback:

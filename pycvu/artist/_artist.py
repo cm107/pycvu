@@ -208,7 +208,9 @@ class Artist(Base):
         self,
         pt1: VectorVar | ImageVectorCallback,
         pt2: VectorVar | ImageVectorCallback,
-        fill: bool=False, repeat: int=1
+        fill: bool=False,
+        rotation: FloatVar=0,
+        repeat: int=1
     ) -> Artist:
         """Draws a rectangle.
 
@@ -224,7 +226,8 @@ class Artist(Base):
             pt1=pt1, pt2=pt2,
             color=Artist.color,
             thickness=Artist.thickness if not fill else -1,
-            lineType=Artist.lineType
+            lineType=Artist.lineType,
+            rotation=rotation
         )
         if repeat > 1:
             p = RepeatDrawCallback(p, repeat=repeat)
@@ -293,7 +296,9 @@ class Artist(Base):
     def text(
         self, text: StringVar,
         org: VectorVar,
-        bottomLeftOrigin: bool=False, repeat: int=1
+        bottomLeftOrigin: bool=False,
+        rotation: FloatVar=0,
+        repeat: int=1
     ) -> Artist:
         """Draws text on the image.
 
@@ -314,7 +319,8 @@ class Artist(Base):
             fontFace=Artist.fontFace, fontScale=Artist.fontScale,
             color=Artist.color, thickness=Artist.thickness,
             lineType=Artist.lineType,
-            bottomLeftOrigin=bottomLeftOrigin
+            bottomLeftOrigin=bottomLeftOrigin,
+            rotation=rotation
         )
         if repeat > 1:
             p = RepeatDrawCallback(p, repeat=repeat)
@@ -323,6 +329,7 @@ class Artist(Base):
     def overlay_image(
         self, foreground: ImageVar,
         position: VectorVar | ImageVectorCallback,
+        rotation: FloatVar=0,
         repeat: int=1
     ) -> Artist:
         maskCompatibleTypes = [LoadableImageMask, LoadableImageMaskHandler]
@@ -340,7 +347,8 @@ class Artist(Base):
         p = partial(
             CvUtil.overlay_image,
             foreground=foreground,
-            position=position
+            position=position,
+            rotation=rotation
         )
         if repeat > 1:
             p = RepeatDrawCallback(p, repeat=repeat)

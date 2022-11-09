@@ -140,61 +140,61 @@ artist.ellipse(
 
 # Proc 10
 Artist.thickness = Interval[int](1, 3)
-# TODO: rotation: [-10, 10]
 artist.rectangle(
     pt1=CvUtil.Callback.get_position_interval,
     pt2=CvUtil.Callback.get_position_interval,
+    rotation=Interval[float](-10, 10),
     repeat=10
 )
 
 Artist.maskSetting.track = True
 # Proc 11
 # TODO: scale: [0.9, 1.1]
-# TODO: rotation: [-5, 5]
 # TODO: noise: [-10, 20]
 artist.overlay_image(
     foreground=imgHandler[0],
     position=CvUtil.Callback.get_position_interval,
+    rotation=Interval[float](-5, 5),
     repeat=1
 )
 
 # Proc 12
 # TODO: scale: [0.9, 1.1]
-# TODO: rotation: [-5, 5]
 # TODO: noise: [-10, 20]
 artist.overlay_image(
     foreground=imgHandler[1],
     position=CvUtil.Callback.get_position_interval,
+    rotation=Interval[float](-5, 5),
     repeat=1
 )
 
 # Proc 12
 # TODO: scale: [0.9, 1.1]
-# TODO: rotation: [-5, 5]
 # TODO: noise: [-10, 20]
 artist.overlay_image(
     foreground=imgHandler[3:7],
     position=CvUtil.Callback.get_position_interval,
+    rotation=Interval[float](-5, 5),
     repeat=1
 )
 
 # Proc 13
 # TODO: scale: [0.9, 1.1]
-# TODO: rotation: [-5, 5]
 # TODO: noise: [-20, 0]
 artist.overlay_image(
     foreground=imgHandler[10],
     position=CvUtil.Callback.get_position_interval,
+    rotation=Interval[float](-5, 5),
     repeat=2
 )
 
 # Proc 14
 # TODO: scale: [0.9, 1.1]
-# TODO: rotation: [-5, 5]
 # TODO: noise: [30, 50]
 artist.overlay_image(
     foreground=imgHandler[10],
     position=CvUtil.Callback.get_position_interval,
+    rotation=Interval[float](-5, 5),
     repeat=1
 )
 

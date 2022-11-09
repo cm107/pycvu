@@ -82,8 +82,11 @@ def debug(cls: Type[Artist]):
     drawer.affine_rotate(45, adjustBorder=True)
     cls.color = colorInterval.random()
     cls.fontScale = 2.0
-    drawer.text("Hello World!", org=(100, 100))
+    cls.maskSetting.track = True
+    drawer.text("Hello World!", org=(100, 100), rotation=0)
+    drawer.text("Hello World!", org=(100, 100), rotation=Interval[float](-180, 180))
     drawer.text("Hello World!", org=(100, 200), bottomLeftOrigin=True)
+    cls.maskSetting.track = False
 
     cls.maskSetting.track = True
     drawer.pil.text(text="荒唐無稽", position=(300, 300), rotation=Interval[float](0, 359))
@@ -126,11 +129,17 @@ def debug(cls: Type[Artist]):
     #     drawer.pil.hanko(text=textGen, position=PilUtil.Callback.get_position_interval)
 
     cls.maskSetting.track = True
-    drawer.overlay_image(imgHandlerRef, position=positionCallback, repeat=2)
+    drawer.overlay_image(imgHandlerRef, position=positionCallback, rotation=Interval[float](-180, 180), repeat=4)
     cls.maskSetting.track = False
 
     drawer.line(pt1=positionCallback, pt2=positionCallback, repeat=10)
-    drawer.rectangle(pt1=positionCallback, pt2=positionCallback, fill=False, repeat=10)
+    cls.maskSetting.track = True
+    drawer.rectangle(
+        pt1=positionCallback, pt2=positionCallback, fill=False,
+        rotation=Interval[float](-180, 180),
+        repeat=10
+    )
+    cls.maskSetting.track = False
     drawer.ellipse(
         center=positionCallback,
         axis=Interval[Vector[float]](Vector[float](5, 5), Vector[float](100, 100)),
