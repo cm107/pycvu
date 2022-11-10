@@ -9,7 +9,7 @@ from pyevu import BBox2D, Vector2
 
 from pycvu.interval import Interval
 
-from ..color import Color
+from ..color import Color, HSV
 from ..vector import Vector
 if TYPE_CHECKING:
     from ..mask import Mask, MaskHandler
@@ -348,6 +348,7 @@ class CvUtil:
         foreground: ImageVar,
         position: VectorVar | ImageVectorCallback,
         rotation: FloatVar=0, scale: FloatVar=1,
+        noise: NoiseVar=None,
         refMask: Mask=None, maskHandler: MaskHandler=None
     ) -> npt.NDArray[np.uint8]:
         foreground, mask = Convert.cast_image(foreground)
@@ -356,6 +357,27 @@ class CvUtil:
         position = Convert.cast_vector(position)
         rotation = Convert.cast_builtin(rotation)
         scale = Convert.cast_builtin(scale)
+        if noise is not None:
+            assert type(noise) is Interval
+            assert noise.generic_type in [Color, HSV, int]
+            if noise.generic_type is HSV:
+                noise = Interval[Color](noise.valMin.to_color(), noise.valMax.to_color())
+            
+            if noise.generic_type is Color:
+                rmin, gmin, bmin = noise.valMin.rgb
+                rmax, gmax, bmax = noise.valMax.rgb
+                r = np.random.randint(rmin, rmax, size=foreground.shape[:2], dtype=np.int16)
+                g = np.random.randint(gmin, gmax, size=foreground.shape[:2], dtype=np.int16)
+                b = np.random.randint(bmin, bmax, size=foreground.shape[:2], dtype=np.int16)
+                noiseArr = np.stack([b, g, r], axis=2).astype(np.int16)
+            elif noise.generic_type is int:
+                v = np.random.randint(noise.valMin, noise.valMax, size=foreground.shape[:2], dtype=np.int16)
+                noiseArr = np.stack([v, v, v], axis=2).astype(np.int16)
+            else:
+                raise Exception
+            noiseMask = np.stack([mask, mask, mask], axis=2).astype(np.bool_) if mask is not None else None
+            foreground = np.where(noiseMask, foreground + noiseArr, foreground).clip(0, 255).astype(np.uint8)
+
         bh, bw = img.shape[:2]
         fh, fw = foreground.shape[:2]
         x, y = position

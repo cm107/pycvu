@@ -33,7 +33,7 @@ Artist.fontScale = Interval[float](0.4, 0.5)
 Artist.thickness = Interval[int](1, 2)
 # Artist.color = Interval[Color](Color(0, 0, 0), Color(50, 50, 50)) # hsv would be better
 # Kume was setting all color channels to the same value. Doing this with hsv should have the same effect.
-Artist.color = Interval[HSV](HSV(0,0,0), HSV(0,0,0.2))
+Artist.color = Interval[HSV](HSV(0,0,0), HSV(0,0,50/255))
 artist.text(
     text=TextGenerator(
         characters=CharacterSets.alpha,
@@ -149,52 +149,52 @@ artist.rectangle(
 
 Artist.maskSetting.track = True
 # Proc 11
-# TODO: noise: [-10, 20]
 artist.overlay_image(
     foreground=imgHandler[0],
     position=CvUtil.Callback.get_position_interval,
     rotation=Interval[float](-5, 5),
     scale=Interval[float](0.9, 1.1),
+    noise=Interval[int](-10, 20),
     repeat=1
 )
 
 # Proc 12
-# TODO: noise: [-10, 20]
 artist.overlay_image(
     foreground=imgHandler[1],
     position=CvUtil.Callback.get_position_interval,
     rotation=Interval[float](-5, 5),
     scale=Interval[float](0.9, 1.1),
+    noise=Interval[int](-10, 20),
     repeat=1
 )
 
 # Proc 12
-# TODO: noise: [-10, 20]
 artist.overlay_image(
     foreground=imgHandler[3:7],
     position=CvUtil.Callback.get_position_interval,
     rotation=Interval[float](-5, 5),
     scale=Interval[float](0.9, 1.1),
+    noise=Interval[int](-10, 20),
     repeat=1
 )
 
 # Proc 13
-# TODO: noise: [-20, 0]
 artist.overlay_image(
     foreground=imgHandler[10],
     position=CvUtil.Callback.get_position_interval,
     rotation=Interval[float](-5, 5),
     scale=Interval[float](0.9, 1.1),
+    noise=Interval[int](-20, 0),
     repeat=2
 )
 
 # Proc 14
-# TODO: noise: [30, 50]
 artist.overlay_image(
     foreground=imgHandler[10],
     position=CvUtil.Callback.get_position_interval,
     rotation=Interval[float](-5, 5),
     scale=Interval[float](0.9, 1.1),
+    noise=Interval[int](30, 50),
     repeat=1
 )
 
@@ -225,3 +225,9 @@ for i, mask in enumerate(maskHandler):
     while len(numStr) < 2:
         numStr = f"0{numStr}"
     cv2.imwrite(f"{previewDump}/mask{numStr}.png", maskImg)
+
+cv2.namedWindow('result', cv2.WINDOW_NORMAL)
+cv2.resizeWindow('result', 500, 500)
+cv2.imshow('result', result)
+cv2.waitKey()
+cv2.destroyAllWindows()

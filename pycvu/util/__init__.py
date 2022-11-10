@@ -1,5 +1,5 @@
 from ._var import StringVar, VectorVar, ImageVectorCallback, \
-    PilImageVectorCallback, ColorVar, IntVar, FloatVar, \
+    PilImageVectorCallback, ColorVar, NoiseVar, IntVar, FloatVar, \
     RepeatDrawCallback, DrawCallback
 from ._convert import Convert
 from ._cv import CvUtil

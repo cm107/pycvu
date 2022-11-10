@@ -129,7 +129,14 @@ def debug(cls: Type[Artist]):
     #     drawer.pil.hanko(text=textGen, position=PilUtil.Callback.get_position_interval)
 
     cls.maskSetting.track = True
-    drawer.overlay_image(imgHandlerRef, position=positionCallback, rotation=Interval[float](-180, 180), scale=Interval[float](0.5, 1.5), repeat=4)
+    drawer.overlay_image(
+        imgHandlerRef, position=positionCallback,
+        rotation=Interval[float](-180, 180),
+        scale=Interval[float](0.5, 1.5),
+        # noise=Interval[HSV](HSV(0,0,-50/255), HSV(0,0,50/255)),
+        noise=Interval[int](-50, 50),
+        repeat=4
+    )
     cls.maskSetting.track = False
 
     drawer.line(pt1=positionCallback, pt2=positionCallback, repeat=10)
@@ -182,6 +189,8 @@ def debug(cls: Type[Artist]):
             numStr = f"0{numStr}"
         cv2.imwrite(f"{previewDump}/mask{numStr}.png", maskImg)
 
+    cv2.namedWindow('result', cv2.WINDOW_NORMAL)
+    cv2.resizeWindow('result', 500, 500)
     cv2.imshow('result', result)
     cv2.waitKey()
     cv2.destroyAllWindows()

@@ -7,11 +7,12 @@ import cv2
 import numpy as np
 
 from pycvu.base import BaseUtil, Base, Context, ContextVarRef
-from ..color import Color
+from ..interval import Interval
+from ..color import Color, HSV
 from ..mask import MaskSetting, Mask, MaskHandler
 from ..vector import Vector
 from ..util import CvUtil, \
-    VectorVar, ImageVectorCallback, ColorVar, \
+    VectorVar, ImageVectorCallback, ColorVar, NoiseVar, \
     IntVar, FloatVar, StringVar, ImageVar, \
     DrawCallback, RepeatDrawCallback, \
     LoadableImageMask, LoadableImageMaskHandler
@@ -22,15 +23,11 @@ __all__ = [
 
 """
 What next? Refer to Kume's logic.
-* range_noise?
-    * It looks like this is just adding a random integer (usually small) to all pixels in the image. This doesn't affect the mask.
 * n_merge
     * Not sure what the point of this is. I guess he wanted some of the drawing methods to be omitted sometimes.
 
 * OneOf
 * SomeOf
-
-I should probably start trying to match Kume's config.
 """
 
 from ..vector import Vector
@@ -330,6 +327,7 @@ class Artist(Base):
         self, foreground: ImageVar,
         position: VectorVar | ImageVectorCallback,
         rotation: FloatVar=0, scale: FloatVar=1,
+        noise: NoiseVar=None,
         repeat: int=1
     ) -> Artist:
         maskCompatibleTypes = [LoadableImageMask, LoadableImageMaskHandler]
@@ -349,7 +347,8 @@ class Artist(Base):
             foreground=foreground,
             position=position,
             rotation=rotation,
-            scale=scale
+            scale=scale,
+            noise=noise
         )
         if repeat > 1:
             p = RepeatDrawCallback(p, repeat=repeat)

@@ -19,6 +19,7 @@ __all__ = [
     "ImageVectorCallback",
     "PilImageVectorCallback",
     "ColorVar",
+    "NoiseVar",
     "IntVar",
     "FloatVar",
     "RepeatDrawCallback",
@@ -30,6 +31,7 @@ VectorVar = tuple[int, int] | Vector | Interval
 ImageVectorCallback = Callable[[np.ndarray], VectorVar]
 PilImageVectorCallback = Callable[[pilImage.Image], VectorVar]
 ColorVar = tuple[int, int, int] | Color | HSV | Interval
+NoiseVar = Interval[Color] | Interval[HSV] | Interval[int]
 IntVar = int | Interval
 FloatVar = float | Interval
 

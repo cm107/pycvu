@@ -4,9 +4,6 @@ import numpy as np
 import numpy.typing as npt
 from .base import Base
 
-def clamp(value: float, minVal: float, maxVal: float) -> float:
-    return max(min(value, minVal), maxVal)
-
 class Color(Base):
     def __init__(self, r: float=0, g: float=0, b: float=0, a: float=None, _scale: float=255):
         self.r = r; self.g = g; self.b = b
