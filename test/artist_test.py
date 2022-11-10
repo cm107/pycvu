@@ -149,52 +149,52 @@ artist.rectangle(
 
 Artist.maskSetting.track = True
 # Proc 11
-# TODO: scale: [0.9, 1.1]
 # TODO: noise: [-10, 20]
 artist.overlay_image(
     foreground=imgHandler[0],
     position=CvUtil.Callback.get_position_interval,
     rotation=Interval[float](-5, 5),
+    scale=Interval[float](0.9, 1.1),
     repeat=1
 )
 
 # Proc 12
-# TODO: scale: [0.9, 1.1]
 # TODO: noise: [-10, 20]
 artist.overlay_image(
     foreground=imgHandler[1],
     position=CvUtil.Callback.get_position_interval,
     rotation=Interval[float](-5, 5),
+    scale=Interval[float](0.9, 1.1),
     repeat=1
 )
 
 # Proc 12
-# TODO: scale: [0.9, 1.1]
 # TODO: noise: [-10, 20]
 artist.overlay_image(
     foreground=imgHandler[3:7],
     position=CvUtil.Callback.get_position_interval,
     rotation=Interval[float](-5, 5),
+    scale=Interval[float](0.9, 1.1),
     repeat=1
 )
 
 # Proc 13
-# TODO: scale: [0.9, 1.1]
 # TODO: noise: [-20, 0]
 artist.overlay_image(
     foreground=imgHandler[10],
     position=CvUtil.Callback.get_position_interval,
     rotation=Interval[float](-5, 5),
+    scale=Interval[float](0.9, 1.1),
     repeat=2
 )
 
 # Proc 14
-# TODO: scale: [0.9, 1.1]
 # TODO: noise: [30, 50]
 artist.overlay_image(
     foreground=imgHandler[10],
     position=CvUtil.Callback.get_position_interval,
     rotation=Interval[float](-5, 5),
+    scale=Interval[float](0.9, 1.1),
     repeat=1
 )
 
@@ -225,5 +225,3 @@ for i, mask in enumerate(maskHandler):
     while len(numStr) < 2:
         numStr = f"0{numStr}"
     cv2.imwrite(f"{previewDump}/mask{numStr}.png", maskImg)
-
-# Color is weird. Need to figure out what kume is doing with this (10, 50) color range.

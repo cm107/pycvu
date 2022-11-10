@@ -329,7 +329,7 @@ class Artist(Base):
     def overlay_image(
         self, foreground: ImageVar,
         position: VectorVar | ImageVectorCallback,
-        rotation: FloatVar=0,
+        rotation: FloatVar=0, scale: FloatVar=1,
         repeat: int=1
     ) -> Artist:
         maskCompatibleTypes = [LoadableImageMask, LoadableImageMaskHandler]
@@ -348,7 +348,8 @@ class Artist(Base):
             CvUtil.overlay_image,
             foreground=foreground,
             position=position,
-            rotation=rotation
+            rotation=rotation,
+            scale=scale
         )
         if repeat > 1:
             p = RepeatDrawCallback(p, repeat=repeat)

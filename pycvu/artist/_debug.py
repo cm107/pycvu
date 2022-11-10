@@ -129,7 +129,7 @@ def debug(cls: Type[Artist]):
     #     drawer.pil.hanko(text=textGen, position=PilUtil.Callback.get_position_interval)
 
     cls.maskSetting.track = True
-    drawer.overlay_image(imgHandlerRef, position=positionCallback, rotation=Interval[float](-180, 180), repeat=4)
+    drawer.overlay_image(imgHandlerRef, position=positionCallback, rotation=Interval[float](-180, 180), scale=Interval[float](0.5, 1.5), repeat=4)
     cls.maskSetting.track = False
 
     drawer.line(pt1=positionCallback, pt2=positionCallback, repeat=10)

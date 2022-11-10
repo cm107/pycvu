@@ -28,7 +28,8 @@ class CvUtil:
     def _apply_rotate(
         img: npt.NDArray[np.uint8], rotation: float,
         drawCallback: Callable[[np.ndarray], np.ndarray],
-        center: tuple[int, int]=None, autoCenter: bool=False
+        center: tuple[int, int]=None, autoCenter: bool=False,
+        scale: float=1
     ) -> npt.NDArray[np.uint8]:
         """
         Refer to https://stackoverflow.com/a/73131334
@@ -50,7 +51,7 @@ class CvUtil:
                 center = (cx, cy)
 
         sizeRotation: tuple[int, int] = (w, h)
-        affineMatrix = cv2.getRotationMatrix2D(center, rotation, 1)
+        affineMatrix = cv2.getRotationMatrix2D(center, rotation, scale)
         tmp = cv2.warpAffine(tmp, affineMatrix, sizeRotation, flags=cv2.INTER_LINEAR, borderValue=(0, 0, 0))
 
         # Does np.uint16 help reduce error?
@@ -346,7 +347,7 @@ class CvUtil:
         img: npt.NDArray[np.uint8],
         foreground: ImageVar,
         position: VectorVar | ImageVectorCallback,
-        rotation: FloatVar=0,
+        rotation: FloatVar=0, scale: FloatVar=1,
         refMask: Mask=None, maskHandler: MaskHandler=None
     ) -> npt.NDArray[np.uint8]:
         foreground, mask = Convert.cast_image(foreground)
@@ -354,6 +355,7 @@ class CvUtil:
             position = position(img)
         position = Convert.cast_vector(position)
         rotation = Convert.cast_builtin(rotation)
+        scale = Convert.cast_builtin(scale)
         bh, bw = img.shape[:2]
         fh, fw = foreground.shape[:2]
         x, y = position
@@ -384,7 +386,8 @@ class CvUtil:
                     imgIdx=np.index_exp[ry0:ry1, rx0:rx1, :],
                     fgIdx=np.index_exp[fy0:fy1, fx0:fx1, :]
                 ),
-                center=tuple(fgClampedBBox.center)
+                center=tuple(fgClampedBBox.center),
+                scale=scale
             )
         else:
             result = img.copy()
@@ -401,7 +404,8 @@ class CvUtil:
                         imgIdx=np.index_exp[ry0:ry1, rx0:rx1],
                         fgIdx=np.index_exp[fy0:fy1, fx0:fx1]
                     ),
-                    center=tuple(fgClampedBBox.center)
+                    center=tuple(fgClampedBBox.center),
+                    scale=scale
                 ) > 0
             if maskHandler is not None:
                 _mask = np.zeros(img.shape[:2], dtype=np.uint8)
@@ -413,7 +417,8 @@ class CvUtil:
                         imgIdx=np.index_exp[ry0:ry1, rx0:rx1],
                         fgIdx=np.index_exp[fy0:fy1, fx0:fx1]
                     ),
-                    center=tuple(fgClampedBBox.center)
+                    center=tuple(fgClampedBBox.center),
+                    scale=scale
                 )
                 _mask = _mask > 0
                 for maskObj in maskHandler:
