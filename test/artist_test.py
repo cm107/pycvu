@@ -6,17 +6,29 @@ from pycvu.util import LoadableImageMaskHandler, \
 from pycvu.text_generator import TextGenerator, TextSampler, \
     CharacterSets, StringSets
 
-imgHandlerPath = "imgHandler.json"
-if not os.path.isfile(imgHandlerPath):
-    imgHandler = LoadableImageMaskHandler.from_wildcard(
-        "symbol/*.png",
-        Interval[HSV](HSV(0,0,0), HSV(359.9, 1, 0.9))
+labelImgHandlerPath = "labelImgHandler.json"
+if not os.path.isfile(labelImgHandlerPath):
+    labelImgHandler = LoadableImageMaskHandler.from_wildcard(
+        "symbol/*label*.png",
+        Interval[HSV](HSV(0,0,0), HSV(359.9, 1, 220/255))
     )
-    imgHandler.load_data()
-    imgHandler.save(imgHandlerPath, includeData=True)
+    labelImgHandler.load_data()
+    labelImgHandler.save(labelImgHandlerPath, includeData=True)
 else:
-    imgHandler = LoadableImageMaskHandler.load(imgHandlerPath)
-imgHandlerRef = Artist.context.register_variable(imgHandler)
+    labelImgHandler = LoadableImageMaskHandler.load(labelImgHandlerPath)
+labelImgHandlerRef = Artist.context.register_variable(labelImgHandler)
+
+bgImgHandlerPath = "bgImgHandler.json"
+if not os.path.isfile(bgImgHandlerPath):
+    bgImgHandler = LoadableImageMaskHandler.from_wildcard(
+        "symbol/bg_*.png",
+        Interval[HSV](HSV(0,0,0), HSV(359.9, 1, 220/255))
+    )
+    bgImgHandler.load_data()
+    bgImgHandler.save(bgImgHandlerPath, includeData=True)
+else:
+    bgImgHandler = LoadableImageMaskHandler.load(bgImgHandlerPath)
+bgImgHandlerRef = Artist.context.register_variable(bgImgHandler)
 
 artist = Artist(np.ones((800, 800, 3), dtype=np.uint8) * 255)
 
@@ -150,7 +162,7 @@ artist.rectangle(
 Artist.maskSetting.track = True
 # Proc 11
 artist.overlay_image(
-    foreground=imgHandler[0],
+    foreground=labelImgHandler[0],
     position=CvUtil.Callback.get_position_interval,
     rotation=Interval[float](-5, 5),
     scale=Interval[float](0.9, 1.1),
@@ -160,7 +172,7 @@ artist.overlay_image(
 
 # Proc 12
 artist.overlay_image(
-    foreground=imgHandler[1],
+    foreground=labelImgHandler[1],
     position=CvUtil.Callback.get_position_interval,
     rotation=Interval[float](-5, 5),
     scale=Interval[float](0.9, 1.1),
@@ -170,7 +182,7 @@ artist.overlay_image(
 
 # Proc 12
 artist.overlay_image(
-    foreground=imgHandler[3:7],
+    foreground=labelImgHandler[3:7],
     position=CvUtil.Callback.get_position_interval,
     rotation=Interval[float](-5, 5),
     scale=Interval[float](0.9, 1.1),
@@ -180,7 +192,7 @@ artist.overlay_image(
 
 # Proc 13
 artist.overlay_image(
-    foreground=imgHandler[10],
+    foreground=labelImgHandler[10],
     position=CvUtil.Callback.get_position_interval,
     rotation=Interval[float](-5, 5),
     scale=Interval[float](0.9, 1.1),
@@ -190,7 +202,7 @@ artist.overlay_image(
 
 # Proc 14
 artist.overlay_image(
-    foreground=imgHandler[10],
+    foreground=labelImgHandler[10],
     position=CvUtil.Callback.get_position_interval,
     rotation=Interval[float](-5, 5),
     scale=Interval[float](0.9, 1.1),
@@ -203,6 +215,16 @@ Artist.maskSetting.track = False
 # Proc 15
 # type: "dest"
 # What is this?
+# It looks like it's the exact same as 'label', except that the coco annotations aren't calculated. Again, bad naming conventions in Kume's code.
+artist.overlay_image(
+    foreground=bgImgHandlerRef,
+    position=CvUtil.Callback.get_position_interval,
+    rotation=Interval[float](-20, 20),
+    scale=Interval[float](0.8, 1.2),
+    noise=Interval[int](-50, 100),
+    repeat=2
+)
+
 
 artist.save('/tmp/artistTestSave.json', saveImg=False, saveMeta=True)
 
