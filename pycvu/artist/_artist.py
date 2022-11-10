@@ -1,20 +1,17 @@
 from __future__ import annotations
 from functools import partial
-import importlib
-from typing import Callable, overload
+from typing import overload
 import types
 import cv2
 import numpy as np
 
 from pycvu.base import BaseUtil, Base, Context, ContextVarRef
-from ..interval import Interval
-from ..color import Color, HSV
-from ..mask import MaskSetting, Mask, MaskHandler
-from ..vector import Vector
+from ..color import Color
+from ..mask import MaskSetting, MaskHandler
 from ..util import CvUtil, \
     VectorVar, ImageVectorCallback, ColorVar, NoiseVar, \
     IntVar, FloatVar, StringVar, ImageVar, \
-    DrawCallback, RepeatDrawCallback, \
+    RepeatDrawCallback, \
     LoadableImageMask, LoadableImageMaskHandler
 
 __all__ = [
@@ -26,11 +23,13 @@ What next? Refer to Kume's logic.
 * n_merge
     * Not sure what the point of this is. I guess he wanted some of the drawing methods to be omitted sometimes.
 
+* Randomize drawing order.
 * OneOf
 * SomeOf
 """
 
 from ..vector import Vector
+from ._draw_process import DrawProcess, DrawProcessQueue
 
 
 class Artist(Base):
@@ -71,16 +70,14 @@ class Artist(Base):
         else:
             raise TypeError
         self._img = img
-        self._drawQueue: list[DrawCallback] = []
-        self._maskSettingDict: dict[int, MaskSetting] = {}
+        self._drawQueue: DrawProcessQueue = DrawProcessQueue()
 
         self.pil = Artist.PIL(self)
     
     def to_dict(self, saveImg: bool=True, saveMeta: bool=True) -> dict:
         itemDict: dict = dict()
         itemDict['_img'] = self._img.tolist() if saveImg else None
-        itemDict['_drawQueue'] = self._serialize_queue()
-        itemDict['_maskSettingDict'] = {idx: maskSetting.to_dict() for idx, maskSetting in self._maskSettingDict.items()}
+        itemDict['_drawQueue'] = self._drawQueue.to_dict()
         
         def get_meta_dict(objCls, excludedKeys: list[str]=[]) -> dict:
             metaDict: dict = dict()
@@ -133,8 +130,7 @@ class Artist(Base):
             set_meta(artist.__class__, item_dict['meta']['cv'])
             set_meta(artist.pil.__class__, item_dict['meta']['pil'])
         
-        artist._drawQueue = artist._unserialize_queue(item_dict['_drawQueue'], context=cls.context)
-        artist._maskSettingDict = {int(idx): MaskSetting.from_dict(maskSetting) for idx, maskSetting in item_dict['_maskSettingDict'].items()}
+        artist._drawQueue = DrawProcessQueue.from_dict(item_dict['_drawQueue'], context=cls.context)
         return artist
 
     def save(self, path: str, saveImg: bool=True, saveMeta: bool=True):
@@ -155,8 +151,6 @@ class Artist(Base):
             radius (int): Radius of the circle.
             fill (bool, optional): Whether or not to fill the circle in. Defaults to False.
         """
-        if not self.maskSetting.skip:
-            self._maskSettingDict[len(self._drawQueue)] = self.maskSetting.copy()
         p = partial(
             CvUtil.circle,
             center=center, radius=radius,
@@ -166,7 +160,8 @@ class Artist(Base):
         )
         if repeat > 1:
             p = RepeatDrawCallback(p, repeat=repeat)
-        self._drawQueue.append(p)
+        maskSetting = self.maskSetting.copy() if not self.maskSetting.skip else None
+        self._drawQueue.append(DrawProcess(p, maskSetting))
         return self
     
     def ellipse(
@@ -187,8 +182,6 @@ class Artist(Base):
             endAngle (float, optional): The angle that you want to stop drawing the ellipse at. Defaults to 360.
             fill (bool, optional): Whether or not you want to fill in the ellipse when drawing. Defaults to False.
         """
-        if not self.maskSetting.skip:
-            self._maskSettingDict[len(self._drawQueue)] = self.maskSetting.copy()
         p = partial(
             CvUtil.ellipse,
             center=center, axis=axis,
@@ -199,7 +192,8 @@ class Artist(Base):
         )
         if repeat > 1:
             p = RepeatDrawCallback(p, repeat=repeat)
-        self._drawQueue.append(p)
+        maskSetting = self.maskSetting.copy() if not self.maskSetting.skip else None
+        self._drawQueue.append(DrawProcess(p, maskSetting))
 
     def rectangle(
         self,
@@ -216,8 +210,6 @@ class Artist(Base):
             pt2 (tuple[int, int] | Vector): Second corner of rectangle.
             fill (bool, optional): Whether or not to fill in the rectangle when drawing. Defaults to False.
         """
-        if not self.maskSetting.skip:
-            self._maskSettingDict[len(self._drawQueue)] = self.maskSetting.copy()
         p = partial(
             CvUtil.rectangle,
             pt1=pt1, pt2=pt2,
@@ -228,7 +220,8 @@ class Artist(Base):
         )
         if repeat > 1:
             p = RepeatDrawCallback(p, repeat=repeat)
-        self._drawQueue.append(p)
+        maskSetting = self.maskSetting.copy() if not self.maskSetting.skip else None
+        self._drawQueue.append(DrawProcess(p, maskSetting))
         return self
     
     def line(
@@ -243,8 +236,6 @@ class Artist(Base):
             pt1 (tuple[int, int] | Vector): Where to start drawing the line.
             pt2 (tuple[int, int] | Vector): Where to stop drawing the line.
         """
-        if not self.maskSetting.skip:
-            self._maskSettingDict[len(self._drawQueue)] = self.maskSetting.copy()
         p = partial(
             CvUtil.line,
             pt1=pt1, pt2=pt2,
@@ -254,7 +245,8 @@ class Artist(Base):
         )
         if repeat > 1:
             p = RepeatDrawCallback(p, repeat=repeat)
-        self._drawQueue.append(p)
+        maskSetting = self.maskSetting.copy() if not self.maskSetting.skip else None
+        self._drawQueue.append(DrawProcess(p, maskSetting))
         return self
     
     def affine_rotate(
@@ -287,7 +279,7 @@ class Artist(Base):
             adjustBorder=adjustBorder, center=center,
             borderColor=Artist.color
         )
-        self._drawQueue.append(p)
+        self._drawQueue.append(DrawProcess(p))
         return self
 
     def text(
@@ -308,8 +300,6 @@ class Artist(Base):
                 assumption to be the bottom-left corner of the image.
                 Defaults to False.
         """
-        if not self.maskSetting.skip:
-            self._maskSettingDict[len(self._drawQueue)] = self.maskSetting.copy()
         p = partial(
             CvUtil.text,
             text=text, org=org,
@@ -321,7 +311,8 @@ class Artist(Base):
         )
         if repeat > 1:
             p = RepeatDrawCallback(p, repeat=repeat)
-        self._drawQueue.append(p)
+        maskSetting = self.maskSetting.copy() if not self.maskSetting.skip else None
+        self._drawQueue.append(DrawProcess(p, maskSetting))
 
     def overlay_image(
         self, foreground: ImageVar,
@@ -330,6 +321,16 @@ class Artist(Base):
         noise: NoiseVar=None,
         repeat: int=1
     ) -> Artist:
+        p = partial(
+            CvUtil.overlay_image,
+            foreground=foreground,
+            position=position,
+            rotation=rotation,
+            scale=scale,
+            noise=noise
+        )
+        if repeat > 1:
+            p = RepeatDrawCallback(p, repeat=repeat)
         maskCompatibleTypes = [LoadableImageMask, LoadableImageMaskHandler]
         if (
             not self.maskSetting.skip
@@ -341,18 +342,10 @@ class Artist(Base):
                 )
             )
         ):
-            self._maskSettingDict[len(self._drawQueue)] = self.maskSetting.copy()
-        p = partial(
-            CvUtil.overlay_image,
-            foreground=foreground,
-            position=position,
-            rotation=rotation,
-            scale=scale,
-            noise=noise
-        )
-        if repeat > 1:
-            p = RepeatDrawCallback(p, repeat=repeat)
-        self._drawQueue.append(p)
+            maskSetting = self.maskSetting.copy()
+        else:
+            maskSetting = None
+        self._drawQueue.append(DrawProcess(p, maskSetting))
 
     @overload
     def resize(self, dsize: VectorVar) -> Artist:
@@ -384,78 +377,25 @@ class Artist(Base):
             fx=fx, fy=fy,
             interpolation=Artist.interpolation
         )
-        self._drawQueue.append(p)
+        self._drawQueue.append(DrawProcess(p))
 
     def draw(self) -> np.ndarray:
         """Perform all of the actions in the drawing queue on the source image and return the result.
         """
         result = self._img.copy()
-        for hook in self._drawQueue:
-            if type(hook) is partial:
-                h = RepeatDrawCallback(hook)
-            else:
-                h = hook
-            for i in range(h.repeat):
-                result = h.p(result)
+        self._drawQueue.draw(img=result, out=result)
         return result
     
     def draw_and_get_masks(self) -> tuple[np.ndarray, MaskHandler]:
         """Perform all of the actions in the drawing queue on the source image and return the result.
         """
-        import inspect
         result = self._img.copy()
-
-        maskHandler = MaskHandler()
-        for i, hook in enumerate(self._drawQueue):
-            if type(hook) is partial:
-                h = RepeatDrawCallback(hook)
-            else:
-                h = hook
-            funcArgs: list[str] = inspect.getfullargspec(h.p.func).args
-            if 'refMask' in funcArgs and i in self._maskSettingDict and 'maskHandler' in funcArgs:
-                for j in range(h.repeat):
-                    mask = Mask(setting=self._maskSettingDict[i])
-                    result = h.p(result, refMask=mask, maskHandler=maskHandler)
-                    maskHandler.process(mask)
-            elif 'refMask' in funcArgs and i in self._maskSettingDict:
-                for j in range(h.repeat):
-                    mask = Mask(setting=self._maskSettingDict[i])
-                    result = h.p(result, refMask=mask)
-                    maskHandler.process(mask)
-            elif 'maskHandler' in funcArgs:
-                for j in range(h.repeat):
-                    result = h.p(result, maskHandler=maskHandler)
-            elif i in self._maskSettingDict:
-                print(f"TODO: Implement refMask for {hook.func.__qualname__}")
-                for j in range(h.repeat):
-                    result = h.p(result)
-            else:
-                for j in range(h.repeat):
-                    result = hook(result)
+        result, maskHandler = self._drawQueue.draw_and_get_masks(img=result)
         return result, maskHandler
 
     def draw_and_save(self, path: str):
         """Perform all of the actions in the drawing queue on the source image and save the result to a file.
         """
         cv2.imwrite(path, self.draw())
-
-    def _serialize_queue(self) -> list[dict]:
-        result: list[dict] = []
-        for p in self._drawQueue:
-            if type(p) is RepeatDrawCallback:
-                result.append(p.to_dict())
-            else:
-                result.append(BaseUtil.to_func_dict(p))
-        return result
-
-    def _unserialize_queue(self, serializedQueue: list[dict], **kwargs) -> list[DrawCallback]:
-        queue: list[DrawCallback] = []
-        for pDict in serializedQueue:
-            if '_typedict' in pDict:
-                assert pDict['_typedict']['_qualname'] == RepeatDrawCallback.__name__
-                queue.append(RepeatDrawCallback.from_dict(pDict, **kwargs))
-            else:
-                queue.append(BaseUtil.from_func_dict(pDict, **kwargs))
-        return queue
 
     from ._debug import debug, debug_loop

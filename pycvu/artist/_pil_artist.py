@@ -2,16 +2,15 @@ from __future__ import annotations
 from functools import partial
 from typing import TYPE_CHECKING, Literal
 
-from pycvu.interval import Interval
-from ..vector import Vector
 import pycvu
 
 from ..util import Convert, PilUtil, \
     VectorVar, PilImageVectorCallback, \
     IntVar, FloatVar, StringVar, \
-    DrawCallback, RepeatDrawCallback
+    RepeatDrawCallback
 if TYPE_CHECKING:
     from ._artist import Artist
+from ._draw_process import DrawProcess
 
 __all__ = [
     "PilArtist"
@@ -36,11 +35,11 @@ class PilArtist:
     def _pillow_decorator(method):
         def _inner(ref: PilArtist, *args, **kwargs):
             ref._artist._drawQueue.append(
-                partial(Convert.cv_to_pil)
+                DrawProcess(partial(Convert.cv_to_pil))
             )
             ref = method(ref, *args, **kwargs)
             ref._artist._drawQueue.append(
-                partial(Convert.pil_to_cv)
+                DrawProcess(partial(Convert.pil_to_cv))
             )
             return ref
         return _inner
@@ -59,8 +58,6 @@ class PilArtist:
             text (str): The text that you would like to draw.
             position (tuple[float, float]): Where you would like to draw the text.
         """
-        if not self._artist.maskSetting.skip:
-            self._artist._maskSettingDict[len(self._artist._drawQueue)] = self._artist.maskSetting.copy()
         p = partial(
             PilUtil.text,
             text=text,
@@ -73,7 +70,8 @@ class PilArtist:
         )
         if repeat > 1:
             p = RepeatDrawCallback(p, repeat=repeat)
-        self._artist._drawQueue.append(p)
+        maskSetting = self._artist.maskSetting.copy() if not self._artist.maskSetting.skip else None
+        self._artist._drawQueue.append(DrawProcess(p, maskSetting))
         return self
     
     @_pillow_decorator
@@ -83,8 +81,6 @@ class PilArtist:
         rotation: FloatVar=0,
         repeat: int=1
     ) -> Artist:
-        if not self._artist.maskSetting.skip:
-            self._artist._maskSettingDict[len(self._artist._drawQueue)] = self._artist.maskSetting.copy()
         p = partial(
             PilUtil.hanko,
             text=text,
@@ -99,5 +95,6 @@ class PilArtist:
         )
         if repeat > 1:
             p = RepeatDrawCallback(p, repeat=repeat)
-        self._artist._drawQueue.append(p)
+        maskSetting = self._artist.maskSetting.copy() if not self._artist.maskSetting.skip else None
+        self._artist._drawQueue.append(DrawProcess(p, maskSetting))
         return self

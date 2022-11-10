@@ -11,6 +11,7 @@ from typing import Any, Callable, Generator, Generic, TypeVar
 import uuid
 import importlib
 import yaml
+import random
 
 class BaseUtil:
     @staticmethod
@@ -470,7 +471,7 @@ class BaseHandler(Generic[T]):
             return self._to_dict_expanded(**kwargs)
 
     @classmethod
-    def _from_dict_compressed(cls, item_dict: dict):
+    def _from_dict_compressed(cls, item_dict: dict, **kwargs):
         assert '_typedict' in item_dict
         assert 'obj_typedict' in item_dict
         _typedict = item_dict['_typedict']
@@ -492,7 +493,7 @@ class BaseHandler(Generic[T]):
                     loaded_val: list = []
                     for val0 in val:
                         val0['_typedict'] = obj_typedict
-                        loaded_val.append(obj_type.from_dict(val0))
+                        loaded_val.append(obj_type.from_dict(val0, **kwargs))
                     constructor_dict[key] = loaded_val
             elif type(val) is dict and '_typedict' in val:
                 inner_cls = BaseUtil.from_type_dict(val['_typedict'])
@@ -522,7 +523,7 @@ class BaseHandler(Generic[T]):
         return obj
 
     @classmethod
-    def _from_dict_expanded(cls, item_dict: dict):
+    def _from_dict_expanded(cls, item_dict: dict, **kwargs):
         assert '_typedict' in item_dict
 
         constructor_params = cls.get_constructor_params()
@@ -540,7 +541,7 @@ class BaseHandler(Generic[T]):
                     for val0 in val:
                         assert '_typedict' in val0
                         obj_type = BaseUtil.from_type_dict(val0['_typedict'])
-                        loaded_val.append(obj_type.from_dict(val0))
+                        loaded_val.append(obj_type.from_dict(val0, **kwargs))
                     constructor_dict[key] = loaded_val
             elif type(val) is dict and '_typedict' in val:
                 inner_cls = BaseUtil.from_type_dict(val['_typedict'])
@@ -571,9 +572,9 @@ class BaseHandler(Generic[T]):
     @classmethod
     def from_dict(cls, item_dict: dict, compressed: bool=True, **kwargs):
         if compressed:
-            return cls._from_dict_compressed(item_dict)
+            return cls._from_dict_compressed(item_dict, **kwargs)
         else:
-            return cls._from_dict_expanded(item_dict)
+            return cls._from_dict_expanded(item_dict, **kwargs)
 
     def append(self, obj: T):
         self._objects.append(obj)
@@ -610,6 +611,9 @@ class BaseHandler(Generic[T]):
                     return idx
         else:
             raise ValueError("Must provide parameters.")
+
+    def shuffle(self):
+        random.shuffle(self._objects)
 
     def save(self, path: str, **kwargs):
         ext = os.path.splitext(path)[1]
