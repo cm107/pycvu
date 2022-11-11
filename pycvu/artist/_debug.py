@@ -50,7 +50,7 @@ def debug(cls: Type[Artist]):
         .circle(center=p0, radius=r)
         .circle(center=p1, radius=r)
         .line(p0, p1)
-        .rectangle(c0, c1)
+        # .rectangle(c0, c1)
     )
     cls.color = colorInterval.random()
     cls.thickness = 4
@@ -60,7 +60,7 @@ def debug(cls: Type[Artist]):
         .circle(center=p0 + offset, radius=r, fill=True)
         .circle(center=p1 + offset, radius=r, fill=True)
         .line(p0 + offset, p1 + offset)
-        .rectangle(c0 + offset, c1 + offset)
+        # .rectangle(c0 + offset, c1 + offset)
     )
     cls.color = colorInterval.random()
     offset = (Vector.down + Vector.left).normalized * 50
@@ -69,7 +69,7 @@ def debug(cls: Type[Artist]):
         .circle(center=p0 + offset, radius=r)
         .circle(center=p1 + offset, radius=r)
         .line(p0 + offset, p1 + offset)
-        .rectangle(c0 + offset, c1 + offset, fill=True)
+        # .rectangle(c0 + offset, c1 + offset, fill=True)
     )
     cls.color = colorInterval.random()
     offset = Vector.up * 100
@@ -139,14 +139,23 @@ def debug(cls: Type[Artist]):
     )
     cls.maskSetting.track = False
 
-    drawer.line(pt1=positionCallback, pt2=positionCallback, repeat=10)
-    cls.maskSetting.track = True
-    drawer.rectangle(
-        pt1=positionCallback, pt2=positionCallback, fill=False,
-        rotation=Interval[float](-180, 180),
-        repeat=10
-    )
-    cls.maskSetting.track = False
+    # drawer.line(pt1=positionCallback, pt2=positionCallback, repeat=10)
+    # cls.maskSetting.track = True
+    # drawer.rectangle(
+    #     pt1=positionCallback, pt2=positionCallback, fill=False,
+    #     rotation=Interval[float](-180, 180),
+    #     repeat=10
+    # )
+    # cls.maskSetting.track = False
+    with drawer.group as g:
+        g.line(pt1=positionCallback, pt2=positionCallback, repeat=10)
+        cls.maskSetting.track = True
+        g.rectangle(
+            pt1=positionCallback, pt2=positionCallback, fill=False,
+            rotation=Interval[float](-180, 180),
+            repeat=10
+        )
+        cls.maskSetting.track = False
     drawer.ellipse(
         center=positionCallback,
         axis=Interval[Vector[float]](Vector[float](5, 5), Vector[float](100, 100)),
@@ -166,6 +175,7 @@ def debug(cls: Type[Artist]):
     )
     cls.maskSetting.track = False
 
+    drawer._drawQueue.shuffle() # TODO: This shuffle won't be saved in the json. Need to create a proc for it.
     drawer.save('/tmp/artistDebugSave.json', saveImg=False, saveMeta=True)
     del drawer
     drawer = cls.load('/tmp/artistDebugSave.json', img=img, loadMeta=True) # Make sure save and load works.

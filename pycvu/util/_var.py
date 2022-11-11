@@ -22,6 +22,7 @@ __all__ = [
     "NoiseVar",
     "IntVar",
     "FloatVar",
+    "ImageInput",
     "RepeatDrawCallback",
     "DrawCallback"
 ]
@@ -34,6 +35,7 @@ ColorVar = tuple[int, int, int] | Color | HSV | Interval
 NoiseVar = Interval[Color] | Interval[HSV] | Interval[int]
 IntVar = int | Interval
 FloatVar = float | Interval
+ImageInput = npt.NDArray[np.uint8] | str
 
 class RepeatDrawCallback:
     def __init__(self, p: partial, repeat: int=1):

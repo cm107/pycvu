@@ -34,13 +34,15 @@ class PilArtist:
     @staticmethod
     def _pillow_decorator(method):
         def _inner(ref: PilArtist, *args, **kwargs):
-            ref._artist._drawQueue.append(
-                DrawProcess(partial(Convert.cv_to_pil))
-            )
-            ref = method(ref, *args, **kwargs)
-            ref._artist._drawQueue.append(
-                DrawProcess(partial(Convert.pil_to_cv))
-            )
+            with ref._artist.group as g:
+                pilRef = g.pil
+                g._add_process(
+                    DrawProcess(partial(Convert.cv_to_pil))
+                )
+                pilRef = method(pilRef, *args, **kwargs)
+                g._add_process(
+                    DrawProcess(partial(Convert.pil_to_cv))
+                )
             return ref
         return _inner
 
@@ -71,7 +73,7 @@ class PilArtist:
         if repeat > 1:
             p = RepeatDrawCallback(p, repeat=repeat)
         maskSetting = self._artist.maskSetting.copy() if not self._artist.maskSetting.skip else None
-        self._artist._drawQueue.append(DrawProcess(p, maskSetting))
+        self._artist._add_process(DrawProcess(p, maskSetting))
         return self
     
     @_pillow_decorator
@@ -96,5 +98,5 @@ class PilArtist:
         if repeat > 1:
             p = RepeatDrawCallback(p, repeat=repeat)
         maskSetting = self._artist.maskSetting.copy() if not self._artist.maskSetting.skip else None
-        self._artist._drawQueue.append(DrawProcess(p, maskSetting))
+        self._artist._add_process(DrawProcess(p, maskSetting))
         return self

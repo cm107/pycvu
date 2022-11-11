@@ -1,6 +1,6 @@
 from ._var import StringVar, VectorVar, ImageVectorCallback, \
     PilImageVectorCallback, ColorVar, NoiseVar, IntVar, FloatVar, \
-    RepeatDrawCallback, DrawCallback
+    ImageInput, RepeatDrawCallback, DrawCallback
 from ._convert import Convert
 from ._cv import CvUtil
 from ._pil import PilUtil

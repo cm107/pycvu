@@ -4,13 +4,14 @@ from typing import overload
 import types
 import cv2
 import numpy as np
+import numpy.typing as npt
 
 from pycvu.base import BaseUtil, Base, Context, ContextVarRef
 from ..color import Color
 from ..mask import MaskSetting, MaskHandler
-from ..util import CvUtil, \
+from ..util import CvUtil, Convert, \
     VectorVar, ImageVectorCallback, ColorVar, NoiseVar, \
-    IntVar, FloatVar, StringVar, ImageVar, \
+    IntVar, FloatVar, StringVar, ImageVar, ImageInput, \
     RepeatDrawCallback, \
     LoadableImageMask, LoadableImageMaskHandler
 
@@ -29,7 +30,7 @@ What next? Refer to Kume's logic.
 """
 
 from ..vector import Vector
-from ._draw_process import DrawProcess, DrawProcessQueue
+from ._draw_process import DrawProcess, DrawProcessQueue, DrawProcessGroup
 
 
 class Artist(Base):
@@ -61,25 +62,30 @@ class Artist(Base):
 
     from ._pil_artist import PilArtist as PIL
 
-    def __init__(self, src: np.ndarray | str):
+    def __init__(self, src: ImageInput | None=None):
         super().__init__()
-        if type(src) is np.ndarray:
-            img = src
-        elif type(src) is str:
-            img = cv2.imread(src)
-        else:
-            raise TypeError
-        self._img = img
+        self._img: npt.NDArray[np.uint8] | None = None
+        if src is not None:
+            self._img = Convert.cast_image_input(src)
         self._drawQueue: DrawProcessQueue = DrawProcessQueue()
 
         self.pil = Artist.PIL(self)
+        self.group = ProcessGrouper(self)
     
-    def to_dict(self, saveImg: bool=True, saveMeta: bool=True) -> dict:
-        itemDict: dict = dict()
-        itemDict['_img'] = self._img.tolist() if saveImg else None
-        itemDict['_drawQueue'] = self._drawQueue.to_dict()
-        
-        def get_meta_dict(objCls, excludedKeys: list[str]=[]) -> dict:
+    @property
+    def src(self) -> npt.NDArray[np.uint8] | None:
+        return self._img
+    
+    @src.setter
+    def src(self, value: ImageInput):
+        if value is not None:
+            self._img = Convert.cast_image_input(value)
+        else:
+            self._img = None
+
+    @classmethod
+    def get_meta(cls) -> dict:
+        def _get_meta_dict(objCls, excludedKeys: list[str]=[]) -> dict:
             metaDict: dict = dict()
             for key, val in objCls.__dict__.items():
                 if (
@@ -87,7 +93,8 @@ class Artist(Base):
                     or type(val) in [
                         types.FunctionType,
                         classmethod,
-                        staticmethod
+                        staticmethod,
+                        property
                     ]
                 ):
                     continue
@@ -98,22 +105,14 @@ class Artist(Base):
             return metaDict
         
         meta: dict = dict(
-            cv=get_meta_dict(self.__class__, excludedKeys=['PIL']),
-            pil=get_meta_dict(self.pil.__class__)
-        ) if saveMeta else None
-        itemDict['meta'] = meta
-        return itemDict
+            cv=_get_meta_dict(cls, excludedKeys=['PIL']),
+            pil=_get_meta_dict(cls.PIL)
+        )
+        return meta
 
     @classmethod
-    def from_dict(cls, item_dict: dict, img: np.ndarray=None, loadMeta: bool=True) -> Artist:
-        if img is None and item_dict['_img'] is None:
-            raise ValueError("Image data not found in item_dict. Must specify img parameter.")
-        elif img is None:
-            img = np.array(item_dict['_img'], dtype=np.uint8)
-        assert img is not None
-        artist = Artist(img)
-        
-        def set_meta(metaObjCls, metaDict: dict):
+    def set_meta(cls, meta: dict):
+        def _set_meta(metaObjCls, metaDict: dict):
             for key, val in metaDict.items():
                 assert hasattr(metaObjCls, key)
                 if type(val) is dict and '_typedict' in val:
@@ -126,9 +125,30 @@ class Artist(Base):
                 else:
                     setattr(metaObjCls, key, val)
         
+        assert type(meta) is dict, f"Expected meta of type dict. Encountered: {type(meta)}"
+        assert 'cv' in meta
+        assert 'pil' in meta
+
+        _set_meta(cls, meta['cv'])
+        _set_meta(cls.PIL, meta['pil'])
+
+    def to_dict(self, saveImg: bool=True, saveMeta: bool=True) -> dict:
+        itemDict: dict = dict()
+        itemDict['_img'] = self._img.tolist() if saveImg and self._img is not None else None
+        itemDict['_drawQueue'] = self._drawQueue.to_dict()
+        meta = type(self).get_meta() if saveMeta else None
+        itemDict['meta'] = meta
+        return itemDict
+
+    @classmethod
+    def from_dict(cls, item_dict: dict, img: np.ndarray=None, loadMeta: bool=True) -> Artist:
+        if img is None and item_dict['_img'] is None:
+            pass
+        elif img is None:
+            img = np.array(item_dict['_img'], dtype=np.uint8)
+        artist = Artist(img)
         if loadMeta and item_dict['meta'] is not None:
-            set_meta(artist.__class__, item_dict['meta']['cv'])
-            set_meta(artist.pil.__class__, item_dict['meta']['pil'])
+            cls.set_meta(item_dict['meta'])
         
         artist._drawQueue = DrawProcessQueue.from_dict(item_dict['_drawQueue'], context=cls.context)
         return artist
@@ -139,6 +159,14 @@ class Artist(Base):
     @classmethod
     def load(cls, path: str, img: np.ndarray=None, loadMeta: bool=True) -> Artist:
         return super().load(path, img=img, loadMeta=loadMeta)
+
+    def _add_process(self, dp: DrawProcess | DrawProcessGroup):
+        if type(dp) is DrawProcess:
+            self._drawQueue.append(dp)
+        elif type(dp) is DrawProcessGroup:
+            self._drawQueue.append(DrawProcess(dp))
+        else:
+            raise TypeError
 
     def circle(
         self, center: VectorVar | ImageVectorCallback,
@@ -161,7 +189,7 @@ class Artist(Base):
         if repeat > 1:
             p = RepeatDrawCallback(p, repeat=repeat)
         maskSetting = self.maskSetting.copy() if not self.maskSetting.skip else None
-        self._drawQueue.append(DrawProcess(p, maskSetting))
+        self._add_process(DrawProcess(p, maskSetting))
         return self
     
     def ellipse(
@@ -193,7 +221,7 @@ class Artist(Base):
         if repeat > 1:
             p = RepeatDrawCallback(p, repeat=repeat)
         maskSetting = self.maskSetting.copy() if not self.maskSetting.skip else None
-        self._drawQueue.append(DrawProcess(p, maskSetting))
+        self._add_process(DrawProcess(p, maskSetting))
 
     def rectangle(
         self,
@@ -221,7 +249,7 @@ class Artist(Base):
         if repeat > 1:
             p = RepeatDrawCallback(p, repeat=repeat)
         maskSetting = self.maskSetting.copy() if not self.maskSetting.skip else None
-        self._drawQueue.append(DrawProcess(p, maskSetting))
+        self._add_process(DrawProcess(p, maskSetting))
         return self
     
     def line(
@@ -246,7 +274,7 @@ class Artist(Base):
         if repeat > 1:
             p = RepeatDrawCallback(p, repeat=repeat)
         maskSetting = self.maskSetting.copy() if not self.maskSetting.skip else None
-        self._drawQueue.append(DrawProcess(p, maskSetting))
+        self._add_process(DrawProcess(p, maskSetting))
         return self
     
     def affine_rotate(
@@ -279,7 +307,7 @@ class Artist(Base):
             adjustBorder=adjustBorder, center=center,
             borderColor=Artist.color
         )
-        self._drawQueue.append(DrawProcess(p))
+        self._add_process(DrawProcess(p))
         return self
 
     def text(
@@ -312,7 +340,7 @@ class Artist(Base):
         if repeat > 1:
             p = RepeatDrawCallback(p, repeat=repeat)
         maskSetting = self.maskSetting.copy() if not self.maskSetting.skip else None
-        self._drawQueue.append(DrawProcess(p, maskSetting))
+        self._add_process(DrawProcess(p, maskSetting))
 
     def overlay_image(
         self, foreground: ImageVar,
@@ -345,7 +373,7 @@ class Artist(Base):
             maskSetting = self.maskSetting.copy()
         else:
             maskSetting = None
-        self._drawQueue.append(DrawProcess(p, maskSetting))
+        self._add_process(DrawProcess(p, maskSetting))
 
     @overload
     def resize(self, dsize: VectorVar) -> Artist:
@@ -377,11 +405,12 @@ class Artist(Base):
             fx=fx, fy=fy,
             interpolation=Artist.interpolation
         )
-        self._drawQueue.append(DrawProcess(p))
+        self._add_process(DrawProcess(p))
 
     def draw(self) -> np.ndarray:
         """Perform all of the actions in the drawing queue on the source image and return the result.
         """
+        assert self._img is not None, f"Need to specify src before drawing."
         result = self._img.copy()
         self._drawQueue.draw(img=result, out=result)
         return result
@@ -389,6 +418,7 @@ class Artist(Base):
     def draw_and_get_masks(self) -> tuple[np.ndarray, MaskHandler]:
         """Perform all of the actions in the drawing queue on the source image and return the result.
         """
+        assert self._img is not None, f"Need to specify src before drawing."
         result = self._img.copy()
         result, maskHandler = self._drawQueue.draw_and_get_masks(img=result)
         return result, maskHandler
@@ -399,3 +429,33 @@ class Artist(Base):
         cv2.imwrite(path, self.draw())
 
     from ._debug import debug, debug_loop
+
+class ProcessGrouper:
+    """
+    Groups drawing methods together.
+    This is mainly useful for shuffling the order of drawing processes.
+    Meta settings are reverted after exiting, so it is also useful for creating
+    a local meta scope.
+    """
+    def __init__(self, rootArtist: Artist):
+        self._rootArtist = rootArtist
+        self._groupArtists: list[Artist] = []
+        self._metaStates: list[dict] = []
+    
+    def __enter__(self) -> Artist:
+        # print(f"{type(self).__name__} __enter__")
+        groupArtist = Artist()
+        self._groupArtists.append(groupArtist)
+        self._metaStates.append(self._rootArtist.get_meta())
+        return groupArtist
+    
+    def __exit__(self, exc_type=None, exc_val=None, exc_tb=None):
+        # print(f"{type(self).__name__} __exit__, {exc_type=}, {exc_val=}, {exc_tb=}")
+        groupArtist = self._groupArtists.pop()
+        meta = self._metaStates.pop()
+        processes = groupArtist._drawQueue._objects.copy()
+        del groupArtist
+        if len(processes) > 0:
+            group = DrawProcessGroup(processes)
+            self._rootArtist._add_process(group)
+        self._rootArtist.set_meta(meta)

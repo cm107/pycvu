@@ -10,16 +10,13 @@ from ..base import Base, BaseHandler, BaseUtil
 from ..util import RepeatDrawCallback
 from ..mask import MaskSetting, Mask, MaskHandler
 
-ProcInOutType = npt.NDArray[np.uint8] | pilImage.Image
-ProcessType = Callable[[ProcInOutType], ProcInOutType] | RepeatDrawCallback
-
 class DrawProcess(Base):
     def __init__(self, p: ProcessType, maskSetting: MaskSetting=None):
         self.p = p
         self.maskSetting = maskSetting
     
     def to_dict(self) -> dict:
-        if type(self.p) is RepeatDrawCallback:
+        if type(self.p) in [RepeatDrawCallback, DrawProcessGroup]:
             pDict = self.p.to_dict()
         else:
             pDict = BaseUtil.to_func_dict(self.p)
@@ -34,8 +31,9 @@ class DrawProcess(Base):
         assert 'p' in item_dict
         assert type(item_dict['p']) is dict
         if '_typedict' in item_dict['p']:
-            assert item_dict['p']['_typedict']['_qualname'] == RepeatDrawCallback.__name__
-            p = RepeatDrawCallback.from_dict(item_dict['p'], **kwargs)
+            objCls = BaseUtil.from_type_dict(item_dict['p']['_typedict'])
+            assert objCls in [RepeatDrawCallback, DrawProcessGroup]            
+            p = objCls.from_dict(item_dict['p'], **kwargs)
         else:
             p = BaseUtil.from_func_dict(item_dict['p'], **kwargs)
         if 'maskSetting' in item_dict:
@@ -46,52 +44,88 @@ class DrawProcess(Base):
 
     def draw(self, img: npt.NDArray[np.uint8]) -> npt.NDArray[np.uint8]:
         out = img.copy()
-        if type(self.p) is partial:
-            hook = RepeatDrawCallback(self.p)
-        else:
-            hook = self.p
+        hook = self.p
+
+        def _draw(out: np.ndarray) -> np.ndarray:
+            if type(hook) is partial:
+                out = hook(out)
+            elif type(hook) is RepeatDrawCallback:
+                for i in range(hook.repeat):
+                    out = hook.p(out)
+            elif type(hook) is DrawProcessGroup:
+                for h in hook:
+                    h: DrawProcess = h # Type hints not working here?
+                    out = h.draw(out)
+            elif callable(hook):
+                out = hook(out)
+            else:
+                raise TypeError
         
-        for i in range(hook.repeat):
-            out = hook.p(out)
-        return out
+        return _draw(out)
     
     def draw_and_get_mask(
         self, img: npt.NDArray[np.uint8],
         maskHandler: MaskHandler
     ) -> npt.NDArray[np.uint8]:
         out = img.copy()
-        if type(self.p) is partial:
-            hook = RepeatDrawCallback(self.p)
-        else:
-            hook = self.p
+        hook = self.p
+
+        def _get_kwargs(fargs: list[str], qualname: str) -> dict:
+            kwargs = dict()
+            if self.maskSetting is not None:
+                if 'refMask' in fargs:
+                    kwargs['refMask'] = Mask(setting=self.maskSetting)
+                else:
+                    print(f"TODO: Implement refMask for {qualname}")
+            if 'maskHandler' in fargs:
+                kwargs['maskHandler'] = maskHandler
+            return kwargs
+
+        def _draw(out: np.ndarray) -> np.ndarray:
+            if type(hook) is partial:
+                fargs: list[str] = inspect.getfullargspec(hook.func).args
+                kwargs = _get_kwargs(fargs, hook.func.__qualname__)
+                out = hook(out, **kwargs)
+                if 'refMask' in kwargs:
+                    maskHandler.process(kwargs['refMask'])
+            elif type(hook) is RepeatDrawCallback:
+                fargs: list[str] = inspect.getfullargspec(hook.p.func).args
+                for i in range(hook.repeat):
+                    kwargs = _get_kwargs(fargs, hook.p.func.__qualname__)
+                    out = hook.p(out, **kwargs)
+                    if 'refMask' in kwargs:
+                        maskHandler.process(kwargs['refMask'])
+            elif type(hook) is DrawProcessGroup:
+                for h in hook:
+                    h: DrawProcess = h # Type hints not working here?
+                    out = h.draw_and_get_mask(out, maskHandler)
+            elif callable(hook):
+                fargs: list[str] = inspect.getfullargspec(hook).args
+                kwargs = _get_kwargs(fargs, hook.__qualname__)
+                out = hook(out, **kwargs)
+                if 'refMask' in kwargs:
+                    maskHandler.process(kwargs['refMask'])
+            else:
+                raise TypeError
+            return out
         
-        funcArgs: list[str] = inspect.getfullargspec(hook.p.func).args
-        if (
-            self.maskSetting is not None
-            and 'refMask' in funcArgs
-            and 'maskHandler' in funcArgs
-        ):
-            for i in range(hook.repeat):
-                mask = Mask(setting=self.maskSetting)
-                out = hook.p(out, refMask=mask, maskHandler=maskHandler)
-                maskHandler.process(mask)
-        elif self.maskSetting is not None and 'refMask' in funcArgs:
-            for i in range(hook.repeat):
-                mask = Mask(setting=self.maskSetting)
-                out = hook.p(out, refMask=mask)
-                maskHandler.process(mask)
-        elif 'maskHandler' in funcArgs:
-            for i in range(hook.repeat):
-                out = hook.p(out, maskHandler=maskHandler)
-        elif self.maskSetting is not None:
-            print(f"TODO: Implement refMask for {hook.p.func.__qualname__}")
-            for i in range(hook.repeat):
-                out = hook.p(out)
-        else:
-            for i in range(hook.repeat):
-                out = hook.p(out)
-        
-        return out
+        return _draw(out)
+
+class DrawProcessGroup(BaseHandler[DrawProcess]):
+    def __init__(self, _objects: list[DrawProcess]=None):
+        super().__init__(_objects)
+
+    def to_dict(self, compressed: bool=True, **kwargs):
+        # print(f"\n{type(self).__name__}.to_dict")
+        result = super().to_dict(compressed=compressed, **kwargs)
+        # print(f"{type(self).__name__} {result=}")
+        return result
+
+    @classmethod
+    def from_dict(cls, item_dict: dict, compressed: bool=True, **kwargs) -> DrawProcessGroup:
+        # print(f"\n{cls.__name__}.from_dict")
+        # print(f"{cls.__name__} {item_dict=}")
+        return super().from_dict(item_dict, compressed=compressed, **kwargs)
 
 class DrawProcessQueue(BaseHandler[DrawProcess]):
     def __init__(self, _objects: list[DrawProcess]=None):
@@ -120,3 +154,7 @@ class DrawProcessQueue(BaseHandler[DrawProcess]):
             )
         
         return (out, maskHandler)
+
+ProcInOutType = npt.NDArray[np.uint8] | pilImage.Image
+ProcessType = Callable[[ProcInOutType], ProcInOutType] \
+    | RepeatDrawCallback | DrawProcessGroup

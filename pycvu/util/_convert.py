@@ -1,5 +1,6 @@
 from __future__ import annotations
 import copy
+import os
 from typing import Any, overload
 import cv2
 from PIL import Image as pilImage
@@ -160,5 +161,16 @@ class Convert:
         elif type(value) is LoadableImageMaskHandler:
             obj = value.random()
             return obj._img, obj._mask
+        else:
+            raise TypeError
+
+    @staticmethod
+    def cast_image_input(value: ImageInput) -> npt.NDArray[np.uint8]:
+        if type(value) is np.ndarray:
+            return value
+        elif type(value) is str:
+            if not os.path.isfile(value):
+                raise FileNotFoundError(f"Failed to find image at: {value}")
+            return cv2.imread(value)
         else:
             raise TypeError
