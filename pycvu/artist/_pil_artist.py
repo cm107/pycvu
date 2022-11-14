@@ -34,7 +34,8 @@ class PilArtist:
     @staticmethod
     def _pillow_decorator(method):
         def _inner(ref: PilArtist, *args, **kwargs):
-            with ref._artist.group as g:
+            weight = kwargs['weight'] if 'weight' in kwargs else 1.0
+            with ref._artist.group(weight=weight) as g:
                 pilRef = g.pil
                 g._add_process(
                     DrawProcess(partial(Convert.cv_to_pil))
@@ -52,7 +53,7 @@ class PilArtist:
         position: VectorVar | PilImageVectorCallback,
         direction: Literal['rtl', 'ltr', 'ttb']='ltr',
         rotation: FloatVar=0,
-        repeat: int=1
+        weight: float=1, repeat: int=1
     ) -> Artist:
         """Draws text on the image.
 
@@ -81,7 +82,7 @@ class PilArtist:
         self, text: StringVar,
         position: VectorVar | PilImageVectorCallback,
         rotation: FloatVar=0,
-        repeat: int=1
+        weight: float=1, repeat: int=1
     ) -> Artist:
         p = partial(
             PilUtil.hanko,

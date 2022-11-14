@@ -7,3 +7,4 @@ from ._pil import PilUtil
 from ._mask import MaskUtil
 from ._loadable_image import LoadableImage, LoadableImageHandler, \
     LoadableImageMask, LoadableImageMaskHandler, ImageVar
+from ._func import *

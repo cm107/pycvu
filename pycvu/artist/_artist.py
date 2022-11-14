@@ -1,6 +1,6 @@
 from __future__ import annotations
 from functools import partial
-from typing import overload
+from typing import overload, Callable
 import types
 import cv2
 import numpy as np
@@ -20,17 +20,12 @@ __all__ = [
 ]
 
 """
-What next? Refer to Kume's logic.
-* n_merge
-    * Not sure what the point of this is. I guess he wanted some of the drawing methods to be omitted sometimes.
-
-* Randomize drawing order.
-* OneOf
-* SomeOf
+TODO: Implement a Sometimes for the sake of affine rotation and resize.
 """
 
 from ..vector import Vector
-from ._draw_process import DrawProcess, DrawProcessQueue, DrawProcessGroup
+from ._draw_process import DrawProcess, DrawProcessQueue, \
+    DrawProcessGroup, DrawPreprocessQueue
 
 
 class Artist(Base):
@@ -70,6 +65,7 @@ class Artist(Base):
         self._drawQueue: DrawProcessQueue = DrawProcessQueue()
 
         self.pil = Artist.PIL(self)
+        self.local = DrawPreprocessQueue()
         self.group = ProcessGrouper(self)
     
     @property
@@ -136,6 +132,7 @@ class Artist(Base):
         itemDict: dict = dict()
         itemDict['_img'] = self._img.tolist() if saveImg and self._img is not None else None
         itemDict['_drawQueue'] = self._drawQueue.to_dict()
+        itemDict['local'] = self.local.to_dict()
         meta = type(self).get_meta() if saveMeta else None
         itemDict['meta'] = meta
         return itemDict
@@ -151,6 +148,7 @@ class Artist(Base):
             cls.set_meta(item_dict['meta'])
         
         artist._drawQueue = DrawProcessQueue.from_dict(item_dict['_drawQueue'], context=cls.context)
+        artist.local = DrawPreprocessQueue.from_dict(item_dict['local'])
         return artist
 
     def save(self, path: str, saveImg: bool=True, saveMeta: bool=True):
@@ -160,17 +158,18 @@ class Artist(Base):
     def load(cls, path: str, img: np.ndarray=None, loadMeta: bool=True) -> Artist:
         return super().load(path, img=img, loadMeta=loadMeta)
 
-    def _add_process(self, dp: DrawProcess | DrawProcessGroup):
+    def _add_process(self, dp: DrawProcess | DrawProcessGroup, weight: float=1.0):
         if type(dp) is DrawProcess:
             self._drawQueue.append(dp)
         elif type(dp) is DrawProcessGroup:
-            self._drawQueue.append(DrawProcess(dp))
+            self._drawQueue.append(DrawProcess(dp, weight=weight))
         else:
             raise TypeError
 
     def circle(
         self, center: VectorVar | ImageVectorCallback,
-        radius: IntVar, fill: bool=False, repeat: int=1
+        radius: IntVar, fill: bool=False,
+        weight: float=1, repeat: int=1
     ) -> Artist:
         """Draws a circle.
 
@@ -189,7 +188,7 @@ class Artist(Base):
         if repeat > 1:
             p = RepeatDrawCallback(p, repeat=repeat)
         maskSetting = self.maskSetting.copy() if not self.maskSetting.skip else None
-        self._add_process(DrawProcess(p, maskSetting))
+        self._add_process(DrawProcess(p, maskSetting, weight))
         return self
     
     def ellipse(
@@ -198,7 +197,8 @@ class Artist(Base):
         angle: FloatVar=0,
         startAngle: FloatVar=0,
         endAngle: FloatVar=360,
-        fill: bool=False, repeat: int=1
+        fill: bool=False,
+        weight: float=1, repeat: int=1
     ) -> Artist:
         """Draws an ellipse.
 
@@ -221,7 +221,7 @@ class Artist(Base):
         if repeat > 1:
             p = RepeatDrawCallback(p, repeat=repeat)
         maskSetting = self.maskSetting.copy() if not self.maskSetting.skip else None
-        self._add_process(DrawProcess(p, maskSetting))
+        self._add_process(DrawProcess(p, maskSetting, weight))
 
     def rectangle(
         self,
@@ -229,6 +229,7 @@ class Artist(Base):
         pt2: VectorVar | ImageVectorCallback,
         fill: bool=False,
         rotation: FloatVar=0,
+        weight: float=1,
         repeat: int=1
     ) -> Artist:
         """Draws a rectangle.
@@ -249,14 +250,14 @@ class Artist(Base):
         if repeat > 1:
             p = RepeatDrawCallback(p, repeat=repeat)
         maskSetting = self.maskSetting.copy() if not self.maskSetting.skip else None
-        self._add_process(DrawProcess(p, maskSetting))
+        self._add_process(DrawProcess(p, maskSetting, weight))
         return self
     
     def line(
         self,
         pt1: VectorVar | ImageVectorCallback,
         pt2: VectorVar | ImageVectorCallback,
-        repeat: int=1
+        weight: float=1, repeat: int=1
     ) -> Artist:
         """Draws a line.
 
@@ -274,7 +275,7 @@ class Artist(Base):
         if repeat > 1:
             p = RepeatDrawCallback(p, repeat=repeat)
         maskSetting = self.maskSetting.copy() if not self.maskSetting.skip else None
-        self._add_process(DrawProcess(p, maskSetting))
+        self._add_process(DrawProcess(p, maskSetting, weight))
         return self
     
     def affine_rotate(
@@ -282,7 +283,8 @@ class Artist(Base):
         degrees: bool=True,
         scale: FloatVar=1,
         adjustBorder: bool=False,
-        center: VectorVar=None
+        center: VectorVar=None,
+        weight: float=1
     ) -> Artist:
         """This rotates the image about the axis coming out of the screen.
 
@@ -307,7 +309,7 @@ class Artist(Base):
             adjustBorder=adjustBorder, center=center,
             borderColor=Artist.color
         )
-        self._add_process(DrawProcess(p))
+        self._add_process(DrawProcess(p, weight=weight))
         return self
 
     def text(
@@ -315,7 +317,7 @@ class Artist(Base):
         org: VectorVar,
         bottomLeftOrigin: bool=False,
         rotation: FloatVar=0,
-        repeat: int=1
+        weight: float=1, repeat: int=1
     ) -> Artist:
         """Draws text on the image.
 
@@ -340,14 +342,14 @@ class Artist(Base):
         if repeat > 1:
             p = RepeatDrawCallback(p, repeat=repeat)
         maskSetting = self.maskSetting.copy() if not self.maskSetting.skip else None
-        self._add_process(DrawProcess(p, maskSetting))
+        self._add_process(DrawProcess(p, maskSetting, weight))
 
     def overlay_image(
         self, foreground: ImageVar,
         position: VectorVar | ImageVectorCallback,
         rotation: FloatVar=0, scale: FloatVar=1,
         noise: NoiseVar=None,
-        repeat: int=1
+        weight: float=1, repeat: int=1
     ) -> Artist:
         p = partial(
             CvUtil.overlay_image,
@@ -373,10 +375,10 @@ class Artist(Base):
             maskSetting = self.maskSetting.copy()
         else:
             maskSetting = None
-        self._add_process(DrawProcess(p, maskSetting))
+        self._add_process(DrawProcess(p, maskSetting, weight))
 
     @overload
-    def resize(self, dsize: VectorVar) -> Artist:
+    def resize(self, dsize: VectorVar, weight: float=1) -> Artist:
         """Resizes the working image to the given target size.
 
         Args:
@@ -385,7 +387,7 @@ class Artist(Base):
         ...
 
     @overload
-    def resize(self, fx: FloatVar=None, fy: FloatVar=None) -> Artist:
+    def resize(self, fx: FloatVar=None, fy: FloatVar=None, weight: float=1) -> Artist:
         """Resizes the working image according to the given scaling factors.
         Scaling factors are relative to the current working image size.
 
@@ -397,7 +399,8 @@ class Artist(Base):
 
     def resize(
         self, dsize: VectorVar=None,
-        fx: FloatVar=None, fy: FloatVar=None
+        fx: FloatVar=None, fy: FloatVar=None,
+        weight: float=1
     ) -> Artist:
         p = partial(
             CvUtil.resize,
@@ -405,14 +408,16 @@ class Artist(Base):
             fx=fx, fy=fy,
             interpolation=Artist.interpolation
         )
-        self._add_process(DrawProcess(p))
+        self._add_process(DrawProcess(p, weight=weight))
 
     def draw(self) -> np.ndarray:
         """Perform all of the actions in the drawing queue on the source image and return the result.
         """
         assert self._img is not None, f"Need to specify src before drawing."
         result = self._img.copy()
-        self._drawQueue.draw(img=result, out=result)
+        result = self._drawQueue.draw(
+            img=result, preprocess=self.local.preprocess
+        )
         return result
     
     def draw_and_get_masks(self) -> tuple[np.ndarray, MaskHandler]:
@@ -420,7 +425,9 @@ class Artist(Base):
         """
         assert self._img is not None, f"Need to specify src before drawing."
         result = self._img.copy()
-        result, maskHandler = self._drawQueue.draw_and_get_masks(img=result)
+        result, maskHandler = self._drawQueue.draw_and_get_masks(
+            img=result, preprocess=self.local.preprocess
+        )
         return result, maskHandler
 
     def draw_and_save(self, path: str):
@@ -441,21 +448,57 @@ class ProcessGrouper:
         self._rootArtist = rootArtist
         self._groupArtists: list[Artist] = []
         self._metaStates: list[dict] = []
+
+        self._pendingWeight: float = 1.0
+        self._pendingPreprocOps: list[Callable[[DrawPreprocessQueue],]] = []
+        self._preprocs: list[DrawPreprocessQueue] = []
+
+    def __call__(self, weight: float) -> ProcessGrouper:
+        self._pendingWeight = weight
+        return self
+
+    def shuffle(self) -> ProcessGrouper:
+        def _shuffle(queue: DrawPreprocessQueue):
+            queue.shuffle()
+        self._pendingPreprocOps.append(_shuffle)
+        return self
     
+    def one_of(self) -> ProcessGrouper:
+        def _one_of(queue: DrawPreprocessQueue):
+            queue.one_of()
+        self._pendingPreprocOps.append(_one_of)
+        return self
+    
+    def some_of(self, n: IntVar) -> ProcessGrouper:
+        def _some_of(queue: DrawPreprocessQueue):
+            queue.some_of(n=n)
+        self._pendingPreprocOps.append(_some_of)
+        return self
+
     def __enter__(self) -> Artist:
         # print(f"{type(self).__name__} __enter__")
         groupArtist = Artist()
+        for preproc_op in self._pendingPreprocOps:
+            preproc_op(groupArtist.local)
+        self._pendingPreprocOps.clear()
+
         self._groupArtists.append(groupArtist)
         self._metaStates.append(self._rootArtist.get_meta())
+        self._preprocs.append(DrawPreprocessQueue())
         return groupArtist
     
     def __exit__(self, exc_type=None, exc_val=None, exc_tb=None):
         # print(f"{type(self).__name__} __exit__, {exc_type=}, {exc_val=}, {exc_tb=}")
         groupArtist = self._groupArtists.pop()
         meta = self._metaStates.pop()
+        preproc = self._preprocs.pop()
         processes = groupArtist._drawQueue._objects.copy()
+        preproc._opQueue.extend(groupArtist.local._opQueue.copy())
+
         del groupArtist
         if len(processes) > 0:
-            group = DrawProcessGroup(processes)
-            self._rootArtist._add_process(group)
+            group = DrawProcessGroup(processes, _preproc=preproc)
+            self._rootArtist._add_process(group, weight=self._pendingWeight)
         self._rootArtist.set_meta(meta)
+        self._pendingWeight = 1.0
+        self._pendingPreprocOps.clear()

@@ -50,7 +50,7 @@ def debug(cls: Type[Artist]):
         .circle(center=p0, radius=r)
         .circle(center=p1, radius=r)
         .line(p0, p1)
-        # .rectangle(c0, c1)
+        .rectangle(c0, c1)
     )
     cls.color = colorInterval.random()
     cls.thickness = 4
@@ -60,7 +60,7 @@ def debug(cls: Type[Artist]):
         .circle(center=p0 + offset, radius=r, fill=True)
         .circle(center=p1 + offset, radius=r, fill=True)
         .line(p0 + offset, p1 + offset)
-        # .rectangle(c0 + offset, c1 + offset)
+        .rectangle(c0 + offset, c1 + offset)
     )
     cls.color = colorInterval.random()
     offset = (Vector.down + Vector.left).normalized * 50
@@ -69,7 +69,7 @@ def debug(cls: Type[Artist]):
         .circle(center=p0 + offset, radius=r)
         .circle(center=p1 + offset, radius=r)
         .line(p0 + offset, p1 + offset)
-        # .rectangle(c0 + offset, c1 + offset, fill=True)
+        .rectangle(c0 + offset, c1 + offset, fill=True)
     )
     cls.color = colorInterval.random()
     offset = Vector.up * 100
@@ -78,14 +78,13 @@ def debug(cls: Type[Artist]):
         angle=30, startAngle=90, endAngle=270,
         fill=True
     )
-    drawer.resize(fx=2, fy=0.9)
-    drawer.affine_rotate(45, adjustBorder=True)
     cls.color = colorInterval.random()
     cls.fontScale = 2.0
     cls.maskSetting.track = True
-    drawer.text("Hello World!", org=(100, 100), rotation=0)
-    drawer.text("Hello World!", org=(100, 100), rotation=Interval[float](-180, 180))
-    drawer.text("Hello World!", org=(100, 200), bottomLeftOrigin=True)
+    with drawer.group(weight=1.0).one_of() as g:
+        g.text("Hello!", org=(100, 100), rotation=0)
+        g.text("How are you?", org=(100, 100), rotation=Interval[float](-180, 180))
+        g.text("I'm fine!", org=(100, 200), bottomLeftOrigin=True)
     cls.maskSetting.track = False
 
     cls.maskSetting.track = True
@@ -175,7 +174,12 @@ def debug(cls: Type[Artist]):
     )
     cls.maskSetting.track = False
 
-    drawer._drawQueue.shuffle() # TODO: This shuffle won't be saved in the json. Need to create a proc for it.
+    drawer.resize(fx=2, fy=0.9, weight=0.1)
+    drawer.affine_rotate(45, adjustBorder=True, weight=0.1)
+
+    # drawer.local.shuffle()
+
+    # drawer._drawQueue.shuffle() # TODO: This shuffle won't be saved in the json. Need to create a proc for it.
     drawer.save('/tmp/artistDebugSave.json', saveImg=False, saveMeta=True)
     del drawer
     drawer = cls.load('/tmp/artistDebugSave.json', img=img, loadMeta=True) # Make sure save and load works.
@@ -189,6 +193,7 @@ def debug(cls: Type[Artist]):
         rmtree(previewDump)
     os.makedirs(previewDump, exist_ok=True)
     cv2.imwrite(f"{previewDump}/result.png", result)
+    print(f"{len(maskHandler)=}")
     cv2.imwrite(f"{previewDump}/maskPreview.png", maskHandler.preview)
     for i, mask in enumerate(maskHandler):
         if mask._mask.sum() == 0:
