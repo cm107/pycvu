@@ -16,11 +16,15 @@ import random
 class BaseUtil:
     @staticmethod
     def copy(obj: Any) -> Any:
-        return obj.copy() if hasattr(obj, "copy") else copy.copy(obj)
+        return obj.copy() \
+            if hasattr(obj, "copy") and type(obj) is not typing._GenericAlias \
+            else copy.copy(obj)
 
     @staticmethod
     def deepcopy(obj: Any) -> Any:
-        return obj.deepcopy() if hasattr(obj, "deepcopy") else copy.deepcopy(obj)
+        return obj.deepcopy() \
+            if hasattr(obj, "deepcopy") and type(obj) is not typing._GenericAlias \
+            else copy.deepcopy(obj)
 
     @staticmethod
     def smart_copy(obj: Any, isDeep: bool=False) -> Any:

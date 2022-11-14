@@ -12,7 +12,6 @@ from ..mask import MaskSetting, MaskHandler
 from ..util import CvUtil, Convert, \
     VectorVar, ImageVectorCallback, ColorVar, NoiseVar, \
     IntVar, FloatVar, StringVar, ImageVar, ImageInput, \
-    RepeatDrawCallback, \
     LoadableImageMask, LoadableImageMaskHandler
 
 __all__ = [
@@ -23,7 +22,6 @@ __all__ = [
 TODO: Implement a Sometimes for the sake of affine rotation and resize.
 """
 
-from ..vector import Vector
 from ._draw_process import DrawProcess, DrawProcessQueue, \
     DrawProcessGroup, DrawPreprocessQueue
 
@@ -158,18 +156,16 @@ class Artist(Base):
     def load(cls, path: str, img: np.ndarray=None, loadMeta: bool=True) -> Artist:
         return super().load(path, img=img, loadMeta=loadMeta)
 
-    def _add_process(self, dp: DrawProcess | DrawProcessGroup, weight: float=1.0):
+    def _add_process(self, dp: DrawProcess):
         if type(dp) is DrawProcess:
             self._drawQueue.append(dp)
-        elif type(dp) is DrawProcessGroup:
-            self._drawQueue.append(DrawProcess(dp, weight=weight))
         else:
             raise TypeError
 
     def circle(
         self, center: VectorVar | ImageVectorCallback,
         radius: IntVar, fill: bool=False,
-        weight: float=1, repeat: int=1
+        weight: float=1, repeat: int=1, prob: float=1.0
     ) -> Artist:
         """Draws a circle.
 
@@ -185,10 +181,8 @@ class Artist(Base):
             thickness=Artist.thickness if not fill else -1,
             lineType=Artist.lineType
         )
-        if repeat > 1:
-            p = RepeatDrawCallback(p, repeat=repeat)
         maskSetting = self.maskSetting.copy() if not self.maskSetting.skip else None
-        self._add_process(DrawProcess(p, maskSetting, weight))
+        self._add_process(DrawProcess(p, maskSetting, weight=weight, repeat=repeat, prob=prob))
         return self
     
     def ellipse(
@@ -198,7 +192,7 @@ class Artist(Base):
         startAngle: FloatVar=0,
         endAngle: FloatVar=360,
         fill: bool=False,
-        weight: float=1, repeat: int=1
+        weight: float=1, repeat: int=1, prob: float=1.0
     ) -> Artist:
         """Draws an ellipse.
 
@@ -218,10 +212,8 @@ class Artist(Base):
             thickness=Artist.thickness if not fill else -1,
             lineType=Artist.lineType
         )
-        if repeat > 1:
-            p = RepeatDrawCallback(p, repeat=repeat)
         maskSetting = self.maskSetting.copy() if not self.maskSetting.skip else None
-        self._add_process(DrawProcess(p, maskSetting, weight))
+        self._add_process(DrawProcess(p, maskSetting, weight=weight, repeat=repeat, prob=prob))
 
     def rectangle(
         self,
@@ -230,7 +222,7 @@ class Artist(Base):
         fill: bool=False,
         rotation: FloatVar=0,
         weight: float=1,
-        repeat: int=1
+        repeat: int=1, prob: float=1.0
     ) -> Artist:
         """Draws a rectangle.
 
@@ -247,17 +239,15 @@ class Artist(Base):
             lineType=Artist.lineType,
             rotation=rotation
         )
-        if repeat > 1:
-            p = RepeatDrawCallback(p, repeat=repeat)
         maskSetting = self.maskSetting.copy() if not self.maskSetting.skip else None
-        self._add_process(DrawProcess(p, maskSetting, weight))
+        self._add_process(DrawProcess(p, maskSetting, weight=weight, repeat=repeat, prob=prob))
         return self
     
     def line(
         self,
         pt1: VectorVar | ImageVectorCallback,
         pt2: VectorVar | ImageVectorCallback,
-        weight: float=1, repeat: int=1
+        weight: float=1, repeat: int=1, prob: float=1.0
     ) -> Artist:
         """Draws a line.
 
@@ -272,10 +262,8 @@ class Artist(Base):
             thickness=Artist.thickness,
             lineType=Artist.lineType
         )
-        if repeat > 1:
-            p = RepeatDrawCallback(p, repeat=repeat)
         maskSetting = self.maskSetting.copy() if not self.maskSetting.skip else None
-        self._add_process(DrawProcess(p, maskSetting, weight))
+        self._add_process(DrawProcess(p, maskSetting, weight=weight, repeat=repeat, prob=prob))
         return self
     
     def affine_rotate(
@@ -284,7 +272,7 @@ class Artist(Base):
         scale: FloatVar=1,
         adjustBorder: bool=False,
         center: VectorVar=None,
-        weight: float=1
+        weight: float=1, prob: float=1.0
     ) -> Artist:
         """This rotates the image about the axis coming out of the screen.
 
@@ -309,7 +297,7 @@ class Artist(Base):
             adjustBorder=adjustBorder, center=center,
             borderColor=Artist.color
         )
-        self._add_process(DrawProcess(p, weight=weight))
+        self._add_process(DrawProcess(p, weight=weight, prob=prob))
         return self
 
     def text(
@@ -317,7 +305,7 @@ class Artist(Base):
         org: VectorVar,
         bottomLeftOrigin: bool=False,
         rotation: FloatVar=0,
-        weight: float=1, repeat: int=1
+        weight: float=1, repeat: int=1, prob: float=1.0
     ) -> Artist:
         """Draws text on the image.
 
@@ -339,17 +327,15 @@ class Artist(Base):
             bottomLeftOrigin=bottomLeftOrigin,
             rotation=rotation
         )
-        if repeat > 1:
-            p = RepeatDrawCallback(p, repeat=repeat)
         maskSetting = self.maskSetting.copy() if not self.maskSetting.skip else None
-        self._add_process(DrawProcess(p, maskSetting, weight))
+        self._add_process(DrawProcess(p, maskSetting, weight=weight, repeat=repeat, prob=prob))
 
     def overlay_image(
         self, foreground: ImageVar,
         position: VectorVar | ImageVectorCallback,
         rotation: FloatVar=0, scale: FloatVar=1,
         noise: NoiseVar=None,
-        weight: float=1, repeat: int=1
+        weight: float=1, repeat: int=1, prob: float=1.0
     ) -> Artist:
         p = partial(
             CvUtil.overlay_image,
@@ -359,8 +345,6 @@ class Artist(Base):
             scale=scale,
             noise=noise
         )
-        if repeat > 1:
-            p = RepeatDrawCallback(p, repeat=repeat)
         maskCompatibleTypes = [LoadableImageMask, LoadableImageMaskHandler]
         if (
             not self.maskSetting.skip
@@ -375,10 +359,10 @@ class Artist(Base):
             maskSetting = self.maskSetting.copy()
         else:
             maskSetting = None
-        self._add_process(DrawProcess(p, maskSetting, weight))
+        self._add_process(DrawProcess(p, maskSetting, weight=weight, repeat=repeat, prob=prob))
 
     @overload
-    def resize(self, dsize: VectorVar, weight: float=1) -> Artist:
+    def resize(self, dsize: VectorVar, weight: float=1, prob: float=1.0) -> Artist:
         """Resizes the working image to the given target size.
 
         Args:
@@ -387,7 +371,7 @@ class Artist(Base):
         ...
 
     @overload
-    def resize(self, fx: FloatVar=None, fy: FloatVar=None, weight: float=1) -> Artist:
+    def resize(self, fx: FloatVar=None, fy: FloatVar=None, weight: float=1, prob: float=1.0) -> Artist:
         """Resizes the working image according to the given scaling factors.
         Scaling factors are relative to the current working image size.
 
@@ -400,7 +384,7 @@ class Artist(Base):
     def resize(
         self, dsize: VectorVar=None,
         fx: FloatVar=None, fy: FloatVar=None,
-        weight: float=1
+        weight: float=1, prob: float=1.0
     ) -> Artist:
         p = partial(
             CvUtil.resize,
@@ -408,7 +392,7 @@ class Artist(Base):
             fx=fx, fy=fy,
             interpolation=Artist.interpolation
         )
-        self._add_process(DrawProcess(p, weight=weight))
+        self._add_process(DrawProcess(p, weight=weight, prob=prob))
 
     def draw(self) -> np.ndarray:
         """Perform all of the actions in the drawing queue on the source image and return the result.
@@ -435,7 +419,7 @@ class Artist(Base):
         """
         cv2.imwrite(path, self.draw())
 
-    from ._debug import debug, debug_loop
+    from ._debug import debug, debug_loop, group_debug
 
 class ProcessGrouper:
     """
@@ -450,11 +434,15 @@ class ProcessGrouper:
         self._metaStates: list[dict] = []
 
         self._pendingWeight: float = 1.0
+        self._pendingRepeat: IntVar = 1
+        self._pendingProb: float = 1.0
         self._pendingPreprocOps: list[Callable[[DrawPreprocessQueue],]] = []
         self._preprocs: list[DrawPreprocessQueue] = []
 
-    def __call__(self, weight: float) -> ProcessGrouper:
+    def __call__(self, weight: float=1.0, repeat: IntVar=1, prob: float=1.0) -> ProcessGrouper:
         self._pendingWeight = weight
+        self._pendingRepeat = repeat
+        self._pendingProb = prob
         return self
 
     def shuffle(self) -> ProcessGrouper:
@@ -498,7 +486,16 @@ class ProcessGrouper:
         del groupArtist
         if len(processes) > 0:
             group = DrawProcessGroup(processes, _preproc=preproc)
-            self._rootArtist._add_process(group, weight=self._pendingWeight)
+            self._rootArtist._add_process(
+                DrawProcess(
+                    group,
+                    weight=self._pendingWeight,
+                    repeat=self._pendingRepeat,
+                    prob=self._pendingProb
+                )
+            )
         self._rootArtist.set_meta(meta)
         self._pendingWeight = 1.0
+        self._pendingRepeat = 1
+        self._pendingProb = 1.0
         self._pendingPreprocOps.clear()

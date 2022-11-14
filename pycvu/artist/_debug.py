@@ -174,8 +174,8 @@ def debug(cls: Type[Artist]):
     )
     cls.maskSetting.track = False
 
-    drawer.resize(fx=2, fy=0.9, weight=0.1)
-    drawer.affine_rotate(45, adjustBorder=True, weight=0.1)
+    drawer.resize(fx=2, fy=0.9, prob=0.5)
+    drawer.affine_rotate(45, adjustBorder=True, prob=0.5)
 
     # drawer.local.shuffle()
 
@@ -237,3 +237,75 @@ def debug_loop(cls: Type[Artist], n: int=1):
             while len(numStr) < 2:
                 numStr = f"0{numStr}"
             cv2.imwrite(f"{previewDump}/mask{numStr}.png", maskImg)
+
+@classmethod
+def group_debug(cls: Type[Artist]):
+    cls.maskSetting.track = True; cls.maskSetting.canBeOccluded = True; cls.maskSetting.canOcclude = True
+
+    imgHandlerPath = "imgHandler.json"
+    if not os.path.isfile(imgHandlerPath):
+        imgHandler = LoadableImageMaskHandler.from_wildcard(
+            "symbol/*.png",
+            Interval[HSV](HSV(0,0,0), HSV(359.9, 1, 0.9))
+        )
+        imgHandler.load_data()
+        imgHandler.save(imgHandlerPath, includeData=True)
+    else:
+        imgHandler = LoadableImageMaskHandler.load(imgHandlerPath)
+    imgHandlerRef = cls.context.register_variable(imgHandler)
+
+    img = np.zeros((500, 500, 3), dtype=np.uint8)
+    drawer = cls(img)
+
+    cls.color = Interval[HSV](HSV(0, 0.9375, 0.5), HSV(359.9, 1.0, 1.0))
+    positionCallback = CvUtil.Callback.get_position_interval
+
+    with drawer.group.some_of(Interval[int](1, 2)) as g:
+        with drawer.group(repeat=3).shuffle() as g0:
+            g0.circle(center=(250, 250), radius=Interval[int](20, 100))
+            g0.line(pt1=(250, 250), pt2=positionCallback)
+        g.rectangle(pt1=positionCallback, pt2=positionCallback, rotation=Interval[float](-180, 180))
+        with drawer.group.one_of() as g0:
+            g0.text("Hi", org=positionCallback)
+            g0.text("Hello", org=positionCallback)
+            g0.text("How are you?", org=positionCallback)
+    with drawer.group(prob=0.5).one_of() as g:
+        rotation = Interval[float](-180, 180)
+        repeat = Interval[int](1, 5)
+        g.pil.hanko("合格", position=PilUtil.Callback.get_position_interval, rotation=rotation, repeat=repeat)
+        g.pil.text("合格", position=PilUtil.Callback.get_position_interval, rotation=rotation, repeat=repeat)
+    drawer.overlay_image(
+        imgHandlerRef, position=positionCallback,
+        rotation=Interval[float](-180, 180),
+        scale=Interval[float](0.5, 1.5),
+        noise=Interval[int](-50, 50),
+        prob=0.5
+    )
+
+    drawer.save('/tmp/artistDebugSave.json', saveImg=False, saveMeta=True)
+    del drawer
+    drawer = cls.load('/tmp/artistDebugSave.json', img=img, loadMeta=True) # Make sure save and load works.
+
+    result, maskHandler = drawer.draw_and_get_masks()
+
+    previewDump = 'previewDump'
+    if os.path.isdir(previewDump):
+        rmtree(previewDump)
+    os.makedirs(previewDump, exist_ok=True)
+    cv2.imwrite(f"{previewDump}/result.png", result)
+    print(f"{len(maskHandler)=}")
+    cv2.imwrite(f"{previewDump}/maskPreview.png", maskHandler.preview)
+    for i, mask in enumerate(maskHandler):
+        if mask._mask.sum() == 0:
+            continue
+        maskImg = mask.get_preview(showBBox=True, showContours=True, minNumPoints=6)
+        numStr = str(i)
+        while len(numStr) < 2:
+            numStr = f"0{numStr}"
+        cv2.imwrite(f"{previewDump}/mask{numStr}.png", maskImg)
+
+    cv2.namedWindow('result', cv2.WINDOW_NORMAL)
+    cv2.resizeWindow('result', 500, 500)
+    cv2.imshow('result', result)
+    cv2.waitKey()
+    cv2.destroyAllWindows()

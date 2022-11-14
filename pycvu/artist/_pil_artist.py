@@ -6,8 +6,7 @@ import pycvu
 
 from ..util import Convert, PilUtil, \
     VectorVar, PilImageVectorCallback, \
-    IntVar, FloatVar, StringVar, \
-    RepeatDrawCallback
+    IntVar, FloatVar, StringVar
 if TYPE_CHECKING:
     from ._artist import Artist
 from ._draw_process import DrawProcess
@@ -35,7 +34,8 @@ class PilArtist:
     def _pillow_decorator(method):
         def _inner(ref: PilArtist, *args, **kwargs):
             weight = kwargs['weight'] if 'weight' in kwargs else 1.0
-            with ref._artist.group(weight=weight) as g:
+            prob = kwargs['prob'] if 'prob' in kwargs else 1.0
+            with ref._artist.group(weight=weight, repeat=1, prob=prob) as g:
                 pilRef = g.pil
                 g._add_process(
                     DrawProcess(partial(Convert.cv_to_pil))
@@ -53,7 +53,7 @@ class PilArtist:
         position: VectorVar | PilImageVectorCallback,
         direction: Literal['rtl', 'ltr', 'ttb']='ltr',
         rotation: FloatVar=0,
-        weight: float=1, repeat: int=1
+        weight: float=1, repeat: int=1, prob: float=1.0
     ) -> Artist:
         """Draws text on the image.
 
@@ -71,10 +71,8 @@ class PilArtist:
             direction=direction,
             rotation=rotation
         )
-        if repeat > 1:
-            p = RepeatDrawCallback(p, repeat=repeat)
         maskSetting = self._artist.maskSetting.copy() if not self._artist.maskSetting.skip else None
-        self._artist._add_process(DrawProcess(p, maskSetting))
+        self._artist._add_process(DrawProcess(p, maskSetting, repeat=repeat))
         return self
     
     @_pillow_decorator
@@ -82,7 +80,7 @@ class PilArtist:
         self, text: StringVar,
         position: VectorVar | PilImageVectorCallback,
         rotation: FloatVar=0,
-        weight: float=1, repeat: int=1
+        weight: float=1, repeat: int=1, prob: float=1.0
     ) -> Artist:
         p = partial(
             PilUtil.hanko,
@@ -96,8 +94,6 @@ class PilArtist:
             marginRatio=PilArtist.hankoMarginRatio,
             rotation=rotation
         )
-        if repeat > 1:
-            p = RepeatDrawCallback(p, repeat=repeat)
         maskSetting = self._artist.maskSetting.copy() if not self._artist.maskSetting.skip else None
-        self._artist._add_process(DrawProcess(p, maskSetting))
+        self._artist._add_process(DrawProcess(p, maskSetting, repeat=repeat))
         return self
