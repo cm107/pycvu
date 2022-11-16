@@ -43,12 +43,14 @@ setup(
         'Pillow>=9.2.0',
         'PyYAML>=6.0',
         'joblib>=1.2.0',
+        'tqdm>=4.64.1',
         'pyevu @ git+ssh://git@github.com/cm107/pyevu.git@master'
     ],
     python_requires='>=3.10',
     entry_points={
         "console_scripts": [
-            "pycvu-coco-show_preview=pycvu.coco.cli.show_preview"
+            "pycvu-coco-show_preview=pycvu.coco.cli.show_preview",
+            "pycvu-artist-generate_dataset=pycvu.artist.cli.generate_dataset"
         ]
     }
 )

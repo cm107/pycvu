@@ -3,8 +3,12 @@ from functools import partial
 from typing import overload, Callable
 import types
 import cv2
+import os
 import numpy as np
 import numpy.typing as npt
+from tqdm import tqdm
+from shutil import rmtree
+import glob
 
 from pycvu.base import BaseUtil, Base, Context, ContextVarRef
 from ..color import Color
@@ -20,6 +24,9 @@ __all__ = [
 
 from ._draw_process import DrawProcess, DrawProcessQueue, \
     DrawProcessGroup, DrawPreprocessQueue
+
+from ..coco.object_detection import *
+from datetime import datetime
 
 class Artist(Base):
     context: Context = Context()
@@ -413,6 +420,107 @@ class Artist(Base):
         """Perform all of the actions in the drawing queue on the source image and save the result to a file.
         """
         cv2.imwrite(path, self.draw())
+
+    def _generate_dataset(
+        self, frames: int, dumpDir: str="artist_dataset_dump",
+        showPbar: bool=True
+    ):
+        if os.path.isdir(dumpDir):
+            rmtree(dumpDir)
+        os.makedirs(dumpDir, exist_ok=True)
+    
+        dataset = Dataset()
+        dataset.info.description = 'Generated with pycvu Artist.'
+        dataset.info.date_created = datetime.now()
+        dataset.info.year = datetime.now().year
+        dataset.licenses.append(
+            License(id=0, name='No License', url='N/A')
+        )
+        pbar = tqdm(total=frames, leave=True) if showPbar else None
+        if pbar is not None:
+            pbar.set_description("Generating Dataset")
+        for i in range(frames):
+            result, maskHandler = self.draw_and_get_masks()
+            imgPath = f"{dumpDir}/frame{i}.png"
+            cv2.imwrite(imgPath, result)
+            image = Image(
+                id=len(dataset.images),
+                width=result.shape[1], height=result.shape[0],
+                file_name=imgPath, date_captured=datetime.now()
+            )
+            dataset.images.append(image)
+
+            for j, mask in enumerate(maskHandler):
+                if mask._mask.sum() == 0:
+                    continue
+
+                category = dataset.categories.get(
+                    lambda c: c.name == mask.setting.category
+                    and c.supercategory == mask.setting.supercategory
+                )
+                if category is None:
+                    category = Category(
+                        id=len(dataset.categories),
+                        name=mask.setting.category,
+                        supercategory=mask.setting.supercategory
+                    )
+                    dataset.categories.append(category)
+                
+                bbox = mask.bbox
+                seg = mask.segmentation
+                seg = seg.prune(lambda poly: len(poly) < 3)
+                ann = Annotation(
+                    id=len(dataset.annotations),
+                    image_id=image.id, category_id=category.id,
+                    segmentation=seg.coco,
+                    area=bbox.area,
+                    bbox=[
+                        bbox.v0.x, bbox.v0.y,
+                        bbox.xInterval.length, bbox.yInterval.length
+                    ],
+                    iscrowd=0
+                )
+                dataset.annotations.append(ann)
+            if pbar is not None:
+                pbar.update()
+        dataset.save(f"{dumpDir}/dataset.json")
+
+    def generate_dataset(
+        self, frames: int, dumpDir: str="artist_dataset_dump",
+        showPbar: bool=True, repeat: int=1
+    ):
+        assert len(self._drawQueue) > 0, f"Nothing has been queued for drawing yet."
+        if repeat > 1:
+            if not os.path.isdir(dumpDir):
+                os.makedirs(dumpDir)
+                currentIter = 0
+            else:
+                datasetDirPaths = [
+                    path
+                    for path in glob.glob(f"{dumpDir}/dataset*")
+                    if os.path.isdir(path)
+                ]
+                iterNums = [int(os.path.basename(path).replace('dataset', '')) for path in datasetDirPaths]
+                lastIter = max(iterNums)
+                lastDatasetDir = datasetDirPaths[iterNums.index(lastIter)]
+                if os.path.isfile(f"{lastDatasetDir}/dataset.json"):
+                    rmtree(lastDatasetDir)
+                    currentIter = lastIter
+                else:
+                    currentIter = lastIter + 1
+            for k in range(currentIter, repeat):
+                kStr = str(k)
+                while len(kStr) < 3:
+                    kStr = f"0{kStr}"
+                self._generate_dataset(
+                    frames=frames, dumpDir=f"{dumpDir}/dataset{kStr}",
+                    showPbar=showPbar
+                )
+        else:
+            self._generate_dataset(
+                frames=frames, dumpDir=dumpDir,
+                showPbar=showPbar
+            )
 
     from ._debug import debug, debug_loop, group_debug
 
