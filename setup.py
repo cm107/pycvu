@@ -42,12 +42,13 @@ setup(
         'opencv-python>=4.6.0.66',
         'Pillow>=9.2.0',
         'PyYAML>=6.0',
+        'joblib>=1.2.0',
         'pyevu @ git+ssh://git@github.com/cm107/pyevu.git@master'
     ],
     python_requires='>=3.10',
-    # entry_points={
-    #     "console_scripts": [
-    #         "pycvu=pycvu.cli.example:main"
-    #     ]
-    # }
+    entry_points={
+        "console_scripts": [
+            "pycvu-coco-show_preview=pycvu.coco.cli.show_preview"
+        ]
+    }
 )

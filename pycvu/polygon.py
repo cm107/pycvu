@@ -117,6 +117,10 @@ class Segmentation(BaseHandler[Polygon]):
     def from_coco(cls, data: list[list[int]]) -> Segmentation:
         return Segmentation([Polygon(polyData) for polyData in data])
 
+    @property
+    def coco(self) -> list[list[int]]:
+        return self.to_coco()
+
     def prune(self, condition: Callable[[Polygon], bool]) -> Segmentation:
         seg = self.deepcopy()
         for i in list(range(len(seg)))[::-1]:

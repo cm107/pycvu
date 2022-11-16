@@ -11,7 +11,8 @@ class MaskSetting(Base):
         self,
         track: bool=False,
         canOcclude: bool=True,
-        canBeOccluded: bool=True
+        canBeOccluded: bool=True,
+        category: str="Mask", supercategory: str="Mask"
     ):
         self.track = track
         """Whether or not mask is added to handler."""
@@ -25,11 +26,17 @@ class MaskSetting(Base):
         This is only relevant when isTracked=True.
         """
 
+        self.category = category
+        """COCO category used when converting to a coco dataset."""
+        
+        self.supercategory = supercategory
+        """COCO supercategory used when converting to a coco dataset."""
+
     @property
     def skip(self) -> bool:
         return not self.track and not self.canOcclude
 
-class Mask(Base):
+class Mask(Base): # TODO: Need an optional category label here for the sake of making datasets.
     def __init__(
         self, _mask: npt.NDArray[np.bool_]=None,
         setting: MaskSetting=MaskSetting()
@@ -69,6 +76,10 @@ class Mask(Base):
         contours, _   = cv2.findContours(self._mask.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
         return contours
 
+    @property
+    def segmentation(self) -> Segmentation:
+        return Segmentation.from_contours(self.contours)
+
     def get_preview(self, showBBox: bool=False, showContours: bool=False, minNumPoints: int=None) -> npt.NDArray[np.uint8]:
         assert self._mask is not None, f"_mask isn't initialized yet"
         maskImg = np.zeros(tuple(list(self._mask.shape) + [3]))
@@ -88,7 +99,7 @@ class Mask(Base):
                 contours = self.contours
                 maskImg = cv2.drawContours(maskImg, contours, -1, (255, 0, 0), 2)
             else:
-                seg = Segmentation.from_contours(self.contours)
+                seg = self.segmentation
                 seg = seg.prune(lambda poly: len(poly) < minNumPoints)
                 maskImg = cv2.drawContours(maskImg, seg.to_contours(), -1, (255, 0, 0), 2)
         return maskImg

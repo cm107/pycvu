@@ -48,6 +48,7 @@ class PilUtil:
         align: Literal['left', 'center', 'right']='left',
         direction: Literal['rtl', 'ltr', 'ttb']='ltr',
         rotation: FloatVar=0,
+        fillMaskTextbox: bool=False,
         refMask: Mask=None
     ) -> pilImage.Image:
         text = Convert.cast_str(text)
@@ -63,23 +64,29 @@ class PilUtil:
         w, h = draw.textsize(text, font=font, direction=direction)
         xy = (position[0] - w/2, position[1] - h/2)
 
-        def drawCallback(d: pilImageDraw.ImageDraw, c: tuple[int, int, int]):
-            d.text(
-                xy=xy,
-                text=text,
-                fill=c,
-                font=font,
-                align=align,
-                direction=direction
-            )
+        def drawCallback(d: pilImageDraw.ImageDraw, c: tuple[int, int, int], fillTextbox: bool=False):
+            if not fillTextbox:
+                d.text(
+                    xy=xy,
+                    text=text,
+                    fill=c,
+                    font=font,
+                    align=align,
+                    direction=direction
+                )
+            else:
+                p0 = (position[0] - w/2, position[1] - h/2)
+                p1 = (position[0] + w/2, position[1] + h/2)
+                shape: list[float] = list(p0) + list(p1)
+                d.rectangle(xy=shape, fill=c)
         
         if refMask is not None:
             mask = pilImage.new("RGB", (img.width, img.height), color=(0, 0, 0))
             maskColor = (255, 255, 255)
             if rotation != 0:
-                mask = PilUtil._apply_rotate(mask, rotation, partial(drawCallback, c=maskColor), center=position)
+                mask = PilUtil._apply_rotate(mask, rotation, partial(drawCallback, c=maskColor, fillTextbox=fillMaskTextbox), center=position)
             else:
-                drawCallback(pilImageDraw.Draw(mask, mode=None), maskColor)
+                drawCallback(pilImageDraw.Draw(mask, mode=None), maskColor, fillTextbox=fillMaskTextbox)
             mask = Convert.pil_to_cv(mask)
             mask = MaskUtil.eq_color(mask, color=maskColor)
             refMask._mask = mask
@@ -184,6 +191,7 @@ class PilUtil:
         marginOffset: FloatVar = 0,
         marginRatio: FloatVar = 0,
         rotation: FloatVar=0,
+        fillMaskTextbox: bool=False,
         refMask: Mask=None
     ):
         text = Convert.cast_str(text)
@@ -209,11 +217,17 @@ class PilUtil:
         w, h = draw.textsize(text, font=font, direction=direction)
         textPosition = (position[0] - w/2, position[1] - h/2)
 
-        def textDrawCallback(d: pilImageDraw.ImageDraw, fill: tuple):
-            d.text(
-                xy=textPosition, text=text, fill=fill,
-                font=font, direction=direction
-            )
+        def textDrawCallback(d: pilImageDraw.ImageDraw, fill: tuple, fillTextbox: bool=False):
+            if not fillTextbox:
+                d.text(
+                    xy=textPosition, text=text, fill=fill,
+                    font=font, direction=direction
+                )
+            else:
+                p0 = (position[0] - w/2, position[1] - h/2)
+                p1 = (position[0] + w/2, position[1] + h/2)
+                shape: list[float] = list(p0) + list(p1)
+                d.rectangle(xy=shape, fill=fill)
 
         if rotation != 0:
             img = PilUtil._apply_rotate(
@@ -235,11 +249,11 @@ class PilUtil:
             if rotation != 0:
                 textMask = PilUtil._apply_rotate(
                     textMask, rotation,
-                    partial(textDrawCallback, fill=textMaskColor),
+                    partial(textDrawCallback, fill=textMaskColor, fillTextbox=fillMaskTextbox),
                     center=position
                 )
             else:
-                textDrawCallback(pilImageDraw.Draw(textMask, mode=None), fill=textMaskColor)
+                textDrawCallback(pilImageDraw.Draw(textMask, mode=None), fill=textMaskColor, fillTextbox=fillMaskTextbox)
             textMask = Convert.pil_to_cv(textMask)
             textMask = MaskUtil.eq_color(textMask, color=textMaskColor)
             assert refMask._mask is not None

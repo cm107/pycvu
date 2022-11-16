@@ -13,11 +13,13 @@ from ..interval import Interval
 from ..util._var import IntVar
 from ..util._convert import Convert
 from ..util._func import clamp
+from ._img_type import ImageType
 
 class DrawProcess(Base):
     def __init__(
         self, p: ProcessType, maskSetting: MaskSetting=None,
-        weight: float=1.0, repeat: IntVar=1, prob: float=1.0
+        weight: float=1.0, repeat: IntVar=1, prob: float=1.0,
+        imgType: ImageType=ImageType.CV
     ):
         self.p = p
         self.maskSetting = maskSetting
@@ -25,6 +27,7 @@ class DrawProcess(Base):
         self.weight = weight
         self.repeat = repeat
         self.prob = prob
+        self.imgType = imgType
     
     def to_dict(self) -> dict:
         if type(self.p) is DrawProcessGroup:
@@ -36,6 +39,7 @@ class DrawProcess(Base):
             result['maskSetting'] = self.maskSetting.to_dict()
         result['repeat'] = self.repeat if not hasattr(self.repeat, 'to_dict') else self.repeat.to_dict()
         result['prob'] = self.prob
+        result['imgType'] = self.imgType.to_dict()
         result['_typedict'] = BaseUtil.to_type_dict(type(self))
         return result
     
@@ -61,20 +65,44 @@ class DrawProcess(Base):
             assert hasattr(repeatCls, 'from_dict')
             repeat = repeatCls.from_dict(repeat)
         prob = item_dict['prob']
+        imgType = ImageType.from_dict(item_dict['imgType'])
         return DrawProcess(
             p, maskSetting,
             weight=weight,
             repeat=repeat,
-            prob=prob
+            prob=prob,
+            imgType=imgType
         )
 
     @property
     def enabled(self) -> bool:
         return random.random() <= self.prob
 
+    @staticmethod
+    def _adjust_to_img_type(img: np.ndarray | pilImage.Image, imgType: ImageType) -> np.ndarray | pilImage.Image:
+        currentImgType = ImageType._value2member_map_[type(img)]
+        if imgType != currentImgType:
+            if currentImgType == ImageType.PIL and imgType == ImageType.CV:
+                return Convert.pil_to_cv(img)
+            elif currentImgType == ImageType.CV and imgType == ImageType.PIL:
+                return Convert.cv_to_pil(img)
+            else:
+                raise ValueError
+        else:
+            return img.copy()
+
     def draw(self, img: npt.NDArray[np.uint8]) -> npt.NDArray[np.uint8]:
-        out = img.copy()
+        # out = img.copy()
+        out = DrawProcess._adjust_to_img_type(img, self.imgType)
         hook = self.p
+        currentImgType = ImageType._value2member_map_[type(out)]
+        if self.imgType != currentImgType:
+            if currentImgType == ImageType.PIL and self.imgType == ImageType.CV:
+                out = Convert.pil_to_cv(out)
+            elif currentImgType == ImageType.CV and self.imgType == ImageType.PIL:
+                out = Convert.cv_to_pil(out)
+            else:
+                raise ValueError
 
         def _draw(out: np.ndarray) -> np.ndarray:
             if self.enabled:
@@ -99,7 +127,8 @@ class DrawProcess(Base):
         self, img: npt.NDArray[np.uint8],
         maskHandler: MaskHandler
     ) -> npt.NDArray[np.uint8]:
-        out = img.copy()
+        # out = img.copy()
+        out = DrawProcess._adjust_to_img_type(img, self.imgType)
         hook = self.p
 
         def _get_kwargs(fargs: list[str], qualname: str) -> dict:
@@ -137,7 +166,49 @@ class DrawProcess(Base):
                     else:
                         raise TypeError
             return out
+
+        # Does not seems to be helping.
+        # def _draw_parallel(out: np.ndarray) -> np.ndarray:
+        #     from joblib import Parallel, delayed
+        #     if self.enabled:
+        #         repeat = self.repeat if type(self.repeat) is not Interval else self.repeat.random()
+        #         if type(hook) is partial:
+        #             fargs: list[str] = inspect.getfullargspec(hook.func).args
+        #             if repeat == 1 or 'maskHandler' in fargs or type(out) is not np.ndarray:
+        #                 for i in range(repeat):
+        #                     kwargs = _get_kwargs(fargs, hook.func.__qualname__)
+        #                     out = hook(out, **kwargs)
+        #                     if 'refMask' in kwargs:
+        #                         maskHandler.process(kwargs['refMask'])
+        #             else:
+        #                 def _inner(out: np.ndarray, hook: ProcessType, maskSetting: MaskSetting) -> tuple[np.ndarray, Mask]:
+        #                     refMask = Mask(setting=maskSetting)
+        #                     out = hook(out.copy(), refMask=refMask)
+        #                     return out, refMask
+
+        #                 results = Parallel(n_jobs=2)(delayed(_inner)(np.zeros_like(out), hook, self.maskSetting.copy()) for i in range(repeat))
+        #                 for tmpImg, refMask in results:
+        #                     out[refMask._mask] = tmpImg[refMask._mask]
+        #                     if 'refMask' in fargs:
+        #                         maskHandler.process(refMask)
+        #         elif type(hook) is DrawProcessGroup:
+        #             gHook = hook._preproc.preprocess(hook)
+        #             for i in range(repeat):
+        #                 for h in gHook:
+        #                     h: DrawProcess = h # Type hints not working here?
+        #                     out = h.draw_and_get_mask(out, maskHandler)
+        #         elif callable(hook):
+        #             fargs: list[str] = inspect.getfullargspec(hook).args
+        #             for i in range(repeat):
+        #                 kwargs = _get_kwargs(fargs, hook.__qualname__)
+        #                 out = hook(out, **kwargs)
+        #                 if 'refMask' in kwargs:
+        #                     maskHandler.process(kwargs['refMask'])
+        #         else:
+        #             raise TypeError
+        #     return out
         
+        # return _draw_parallel(out)
         return _draw(out)
 
 class DrawProcessGroup(BaseHandler[DrawProcess]):
@@ -171,7 +242,8 @@ class DrawProcessQueue(BaseHandler[DrawProcess]):
         else:
             q = self
         for dp in q:
-            dp.draw(out, out=out)
+            out = dp.draw(out)
+        out = DrawProcess._adjust_to_img_type(out, ImageType.CV)
         return out
 
     def draw_and_get_masks(
@@ -192,7 +264,7 @@ class DrawProcessQueue(BaseHandler[DrawProcess]):
                 img=out,
                 maskHandler=maskHandler
             )
-        
+        out = DrawProcess._adjust_to_img_type(out, ImageType.CV)
         return (out, maskHandler)
 
 class DrawPreprocessQueue(Base):

@@ -18,13 +18,8 @@ __all__ = [
     "Artist"
 ]
 
-"""
-TODO: Implement a Sometimes for the sake of affine rotation and resize.
-"""
-
 from ._draw_process import DrawProcess, DrawProcessQueue, \
     DrawProcessGroup, DrawPreprocessQueue
-
 
 class Artist(Base):
     context: Context = Context()

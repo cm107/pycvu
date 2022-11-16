@@ -12,6 +12,7 @@ import uuid
 import importlib
 import yaml
 import random
+from enum import Enum, EnumMeta
 
 class BaseUtil:
     @staticmethod
@@ -62,7 +63,7 @@ class BaseUtil:
     
     @staticmethod
     def to_type_dict(val: Any | type | types.GenericAlias | typing._GenericAlias) -> dict[str, str]:
-        if type(val) is type:
+        if type(val) in [type, EnumMeta]:
             typeDict = {
                 '_module': val.__module__,
                 '_qualname': val.__qualname__
@@ -89,10 +90,16 @@ class BaseUtil:
     
     @staticmethod
     def from_type_dict(type_dict: dict[str, str]) -> type | types.GenericAlias | typing._GenericAlias:
+        _module = type_dict['_module']
+        _qualname = type_dict['_qualname']
+        _qualnameParts = _qualname.split('.') # Can sometimes be ClassA.ClassB.ClassC
         cls = getattr(
-            importlib.import_module(type_dict['_module']),
-            type_dict['_qualname']
+            importlib.import_module(_module),
+            _qualnameParts[0]
         )
+        for part in _qualnameParts[1:]:
+            cls = getattr(cls, part)
+        
         if '_args' in type_dict:
             args = tuple([BaseUtil.from_type_dict(arg_dict) for arg_dict in type_dict['_args']])
             cls = cls[args]
@@ -357,6 +364,22 @@ class BaseHandler(Generic[T]):
             del self._objects[idx]
         elif type(idx) is slice:
             del self._objects[idx.start:idx.stop:idx.step]
+        else:
+            raise TypeError
+
+    def __add__(self, other):
+        if type(self) is type(other):
+            unsupportedKeys = list(self.__dict__.keys())
+            unsupportedKeys.remove('_objects')
+            if len(unsupportedKeys) > 0:
+                print(
+                    f"""Warning: The following {type(self).__name__} variables can't be combined.
+                    {unsupportedKeys}
+                    Data in second operand will be lost in combined result."""
+                )
+            result = self.copy()
+            result._objects += other._objects
+            return result
         else:
             raise TypeError
 
@@ -673,6 +696,17 @@ class BaseObjectHandler(BaseHandler[OBJ]):
         return super().from_dict(item_dict, **kwargs)
 
 OBJ_H = TypeVar('OBJ_H', bound=BaseObjectHandler)
+
+class BaseEnum(Enum):
+    def to_dict(self) -> dict:
+        return dict(
+            name=self.name,
+            _typedict=BaseUtil.to_type_dict(type(self))
+        )
+    
+    @classmethod
+    def from_dict(cls, item_dict: dict):
+        return cls[item_dict['name']]
 
 ContextVar = T | H | OBJ | OBJ_H
 

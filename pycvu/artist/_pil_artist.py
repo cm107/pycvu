@@ -10,6 +10,7 @@ from ..util import Convert, PilUtil, \
 if TYPE_CHECKING:
     from ._artist import Artist
 from ._draw_process import DrawProcess
+from ._img_type import ImageType
 
 __all__ = [
     "PilArtist"
@@ -22,6 +23,9 @@ class PilArtist:
     fontPath: str = f"{pycvu.__path__[0]}/data/font/ipaexg.ttf"
     """Path to the font used when drawing text."""
 
+    fillMaskTextbox: bool = True
+    """When drawing the mask for text, draw a rectangle instead of the actual text."""
+
     hankoIsVertical: bool = True
     hankoOutlineWidthRatio: FloatVar = 0.1
     hankoMarginOffset: FloatVar = 0
@@ -29,25 +33,7 @@ class PilArtist:
 
     def __init__(self, artist: Artist):
         self._artist = artist
-    
-    @staticmethod
-    def _pillow_decorator(method):
-        def _inner(ref: PilArtist, *args, **kwargs):
-            weight = kwargs['weight'] if 'weight' in kwargs else 1.0
-            prob = kwargs['prob'] if 'prob' in kwargs else 1.0
-            with ref._artist.group(weight=weight, repeat=1, prob=prob) as g:
-                pilRef = g.pil
-                g._add_process(
-                    DrawProcess(partial(Convert.cv_to_pil))
-                )
-                pilRef = method(pilRef, *args, **kwargs)
-                g._add_process(
-                    DrawProcess(partial(Convert.pil_to_cv))
-                )
-            return ref
-        return _inner
 
-    @_pillow_decorator
     def text(
         self, text: StringVar,
         position: VectorVar | PilImageVectorCallback,
@@ -69,13 +55,13 @@ class PilArtist:
             color=Convert.bgr_to_rgb(self._artist.color),
             position=position,
             direction=direction,
-            rotation=rotation
+            rotation=rotation,
+            fillMaskTextbox=PilArtist.fillMaskTextbox
         )
         maskSetting = self._artist.maskSetting.copy() if not self._artist.maskSetting.skip else None
-        self._artist._add_process(DrawProcess(p, maskSetting, repeat=repeat))
+        self._artist._add_process(DrawProcess(p, maskSetting, weight=weight, repeat=repeat, prob=prob, imgType=ImageType.PIL))
         return self
     
-    @_pillow_decorator
     def hanko(
         self, text: StringVar,
         position: VectorVar | PilImageVectorCallback,
@@ -92,8 +78,9 @@ class PilArtist:
             outlineWidthRatio=PilArtist.hankoOutlineWidthRatio,
             marginOffset=PilArtist.hankoMarginOffset,
             marginRatio=PilArtist.hankoMarginRatio,
-            rotation=rotation
+            rotation=rotation,
+            fillMaskTextbox=PilArtist.fillMaskTextbox
         )
         maskSetting = self._artist.maskSetting.copy() if not self._artist.maskSetting.skip else None
-        self._artist._add_process(DrawProcess(p, maskSetting, repeat=repeat))
+        self._artist._add_process(DrawProcess(p, maskSetting, weight=weight, repeat=repeat, prob=prob, imgType=ImageType.PIL))
         return self
