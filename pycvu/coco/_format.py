@@ -40,12 +40,13 @@ class CocoBaseHandler(BaseHandler[T]):
         for i, obj in enumerate(result):
             if idUpdateCallback is not None:
                 idUpdateCallback(obj.id, i)
-            result.id = i
+            obj.id = i
             if showPbar:
                 pbar.update()
         if showPbar:
             pbar.close()
         return result
+
 class Info(CocoBase):
     def __init__(
         self,

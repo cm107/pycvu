@@ -307,7 +307,7 @@ class Dataset(CocoBase):
         
         def updateLicenseIdInImages(oldId: int, newId: int):
             for img in result.images.search(lambda img: img.license == oldId):
-                img.id = newId
+                img.license = newId
 
         def updateImgIdInAnnotations(oldId: int, newId: int):
             for ann in result.annotations.search(lambda ann: ann.image_id == oldId):
@@ -349,47 +349,47 @@ class Dataset(CocoBase):
         from pyevu import BBox2D, Vector2
         import cv2
         import numpy as np
+        from ..vis.cv import SimpleVisualizer
 
         s = Dataset.PreviewSettings
 
-        for image in self.images:
-            img = cv2.imread(image.file_name)
-            assert img is not None
+        vis = SimpleVisualizer()
+        with vis.loop(self.images) as loop:
+            while not loop.done:
+                image = self.images[loop.index]
+                img = cv2.imread(image.file_name)
+                assert img is not None
 
-            anns = self.annotations.search(
-                lambda ann: ann.image_id == image.id)
-            for ann in anns:
-                bbox = BBox2D(
-                    Vector2(*ann.bbox[:2]), Vector2(*ann.bbox[:2]) + Vector2(*ann.bbox[2:]))
-                seg = Segmentation.from_coco(ann.segmentation)
+                anns = self.annotations.search(
+                    lambda ann: ann.image_id == image.id)
+                for ann in anns:
+                    bbox = BBox2D(
+                        Vector2(*ann.bbox[:2]), Vector2(*ann.bbox[:2]) + Vector2(*ann.bbox[2:]))
+                    seg = Segmentation.from_coco(ann.segmentation)
 
-                if seg is not None and s.showSeg:
-                    if not s.segIsTransparent:
-                        img = cv2.drawContours(img, contours=seg.to_contours(
-                        ), contourIdx=-1, color=s.segColor, thickness=-1)
-                    else:
-                        mask = np.zeros_like(img, dtype=np.uint8)
-                        mask = cv2.drawContours(mask, contours=seg.to_contours(
-                        ), contourIdx=-1, color=s.segColor, thickness=-1)
-                        img = cv2.addWeighted(
-                            src1=img, src2=mask, alpha=1, beta=1, gamma=0)
+                    if seg is not None and s.showSeg:
+                        if not s.segIsTransparent:
+                            img = cv2.drawContours(img, contours=seg.to_contours(
+                            ), contourIdx=-1, color=s.segColor, thickness=-1)
+                        else:
+                            mask = np.zeros_like(img, dtype=np.uint8)
+                            mask = cv2.drawContours(mask, contours=seg.to_contours(
+                            ), contourIdx=-1, color=s.segColor, thickness=-1)
+                            img = cv2.addWeighted(
+                                src1=img, src2=mask, alpha=1, beta=1, gamma=0)
 
-                if bbox is not None and s.showBBox:
-                    img = CvUtil.rectangle(
-                        img=img,
-                        pt1=tuple(bbox.v0), pt2=tuple(bbox.v1),
-                        color=s.bboxColor,
-                        thickness=2, lineType=cv2.LINE_AA
-                    )
+                    if bbox is not None and s.showBBox:
+                        img = CvUtil.rectangle(
+                            img=img,
+                            pt1=tuple(bbox.v0), pt2=tuple(bbox.v1),
+                            color=s.bboxColor,
+                            thickness=2, lineType=cv2.LINE_AA
+                        )
 
-                if s.showLabel:
-                    category = self.categories.get(id=ann.category_id)
-                    assert category is not None
-                    img = CvUtil.text(img, text=category.name, org=tuple(
-                        bbox.center), color=s.labelColor)
+                    if s.showLabel:
+                        category = self.categories.get(id=ann.category_id)
+                        assert category is not None
+                        img = CvUtil.text(img, text=category.name, org=tuple(
+                            bbox.center), color=s.labelColor)
 
-            cv2.namedWindow('preview', cv2.WINDOW_NORMAL)
-            cv2.resizeWindow('preview', 500, 500)
-            cv2.imshow('preview', img)
-            cv2.waitKey()
-            cv2.destroyAllWindows()
+                vis.show(img, title=f'image.id={image.id}')
