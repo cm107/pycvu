@@ -1,5 +1,8 @@
 from __future__ import annotations
+from typing import Callable
 from datetime import datetime
+import copy
+from tqdm import tqdm
 from ..base import Base, BaseHandler
 
 from typing import TypeVar
@@ -15,6 +18,34 @@ class CocoBase(Base):
     def from_dict(cls, item_dict: dict):
         return cls(**item_dict)
 
+T = TypeVar('T', bound=CocoBase)
+class CocoBaseHandler(BaseHandler[T]):
+    def __init__(self, _objects: list[T]=None):
+        super().__init__(_objects)
+    
+    def reindex(
+        self, showPbar: bool=False, leavePbar: bool=False,
+        applyToSelf: bool=True,
+        idUpdateCallback: Callable[[int, int],]=None
+    ):
+        if not applyToSelf:
+            result = copy.deepcopy(self)
+        else:
+            result = self
+        result.sort(key=lambda obj: obj.id)
+
+        if showPbar:
+            pbar = tqdm(total=len(result), leave=leavePbar)
+            pbar.set_description(f"Reindexing {type(self).__name__}")
+        for i, obj in enumerate(result):
+            if idUpdateCallback is not None:
+                idUpdateCallback(obj.id, i)
+            result.id = i
+            if showPbar:
+                pbar.update()
+        if showPbar:
+            pbar.close()
+        return result
 class Info(CocoBase):
     def __init__(
         self,
@@ -65,7 +96,7 @@ class Image(CocoBase):
             params['date_captured'] = datetime.fromtimestamp(params['date_captured'])
         return Image(**params)
 
-class Images(BaseHandler[Image]):
+class Images(CocoBaseHandler[Image]):
     def __init__(self, _objects: list[Image]=None):
         super().__init__(_objects)
 
@@ -80,7 +111,7 @@ class License(CocoBase):
     def __init__(self, id: int, name: str, url: str):
         self.id = id; self.name = name; self.url = url
 
-class Licenses(BaseHandler[License]):
+class Licenses(CocoBaseHandler[License]):
     def __init__(self, _objects: list[License]=None):
         super().__init__(_objects)
 

@@ -445,6 +445,7 @@ class Artist(Base):
             cv2.imwrite(imgPath, result)
             image = Image(
                 id=len(dataset.images),
+                license=dataset.licenses[0].id,
                 width=result.shape[1], height=result.shape[0],
                 file_name=imgPath, date_captured=datetime.now()
             )
@@ -487,7 +488,8 @@ class Artist(Base):
 
     def generate_dataset(
         self, frames: int, dumpDir: str="artist_dataset_dump",
-        showPbar: bool=True, repeat: int=1
+        showPbar: bool=True, repeat: int=1,
+        combineResults: bool=True
     ):
         assert len(self._drawQueue) > 0, f"Nothing has been queued for drawing yet."
         if repeat > 1:
@@ -503,11 +505,15 @@ class Artist(Base):
                 iterNums = [int(os.path.basename(path).replace('dataset', '')) for path in datasetDirPaths]
                 lastIter = max(iterNums)
                 lastDatasetDir = datasetDirPaths[iterNums.index(lastIter)]
-                if os.path.isfile(f"{lastDatasetDir}/dataset.json"):
+                if not os.path.isfile(f"{lastDatasetDir}/dataset.json"):
+                    # Unfinished. Needs to be redone.
                     rmtree(lastDatasetDir)
                     currentIter = lastIter
                 else:
+                    # Resume from next iteration.
                     currentIter = lastIter + 1
+            
+            collectionWasUpdated = False
             for k in range(currentIter, repeat):
                 kStr = str(k)
                 while len(kStr) < 3:
@@ -516,6 +522,16 @@ class Artist(Base):
                     frames=frames, dumpDir=f"{dumpDir}/dataset{kStr}",
                     showPbar=showPbar
                 )
+                collectionWasUpdated = True
+            
+            if combineResults:
+                combinedDatasetPath = f"{dumpDir}/dataset.json"
+                if not os.path.isfile(combinedDatasetPath) or collectionWasUpdated:
+                    datasetPaths = sorted(glob.glob(f"{dumpDir}/dataset*/dataset.json"))
+                    assert len(datasetPaths) > 1
+                    combined = Dataset.combine(datasetPaths, showPbar=showPbar)
+                    combined.save(combinedDatasetPath)
+
         else:
             self._generate_dataset(
                 frames=frames, dumpDir=dumpDir,

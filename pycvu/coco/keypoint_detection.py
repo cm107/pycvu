@@ -1,7 +1,6 @@
 from __future__ import annotations
 from . import object_detection as parent
-from ..base import BaseHandler
-from ._format import CocoBase, Info, Image, Images, License, Licenses
+from ._format import CocoBase, CocoBaseHandler, Info, Image, Images, License, Licenses
 
 __all__ = [
     'Info', 'Image', 'License', 'Licenses',
@@ -24,7 +23,7 @@ class Annotation(parent.Annotation):
         self.keypoints = keypoints
         self.num_keypoints = num_keypoints
 
-class Annotations(BaseHandler[Annotation]):
+class Annotations(CocoBaseHandler[Annotation]):
     def __init__(self, _objects: list[Annotation]=None):
         super().__init__(_objects)
 
@@ -44,7 +43,7 @@ class Category(parent.Category):
         self.keypoints = keypoints
         self.skeleton = skeleton
 
-class Categories(BaseHandler[Category]):
+class Categories(CocoBaseHandler[Category]):
     def __init__(self, _objects: list[Category]=None):
         super().__init__(_objects)
 

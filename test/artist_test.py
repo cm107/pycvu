@@ -278,7 +278,7 @@ with DebugTimer.probe("Artist Init"):
     artist.local.some_of(Interval[int](min(5, numProc), min(10, numProc)))
     artist.local.shuffle()
 
-    artist.save('/tmp/artistTestSave.json', saveImg=False, saveMeta=True)
+    artist.save('artistTestSave.json', saveImg=False, saveMeta=True)
 
 from shutil import rmtree
 import cv2

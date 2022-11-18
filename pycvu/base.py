@@ -7,12 +7,15 @@ import json
 import os
 import types
 import typing
-from typing import Any, Callable, Generator, Generic, TypeVar
+from typing import Any, Callable, Generator, Generic, TypeVar, \
+    overload
 import uuid
 import importlib
 import yaml
 import random
+import operator
 from enum import Enum, EnumMeta
+
 
 class BaseUtil:
     @staticmethod
@@ -28,7 +31,7 @@ class BaseUtil:
             else copy.deepcopy(obj)
 
     @staticmethod
-    def smart_copy(obj: Any, isDeep: bool=False) -> Any:
+    def smart_copy(obj: Any, isDeep: bool = False) -> Any:
         if type(obj) in [list, tuple, set]:
             return type(obj)([BaseUtil.smart_copy(obj0, isDeep) for obj0 in obj])
         elif type(obj) is dict:
@@ -40,7 +43,7 @@ class BaseUtil:
                 return BaseUtil.copy(obj)
 
     @staticmethod
-    def generate_key(obj: Any) -> tuple[type, ...]: # This might be slow.
+    def generate_key(obj: Any) -> tuple[type, ...]:  # This might be slow.
         obj_key = [type(obj).__class__]
         for key, val in obj.__dict__.items():
             if hasattr(val, 'get_key') and callable(val.get_key):
@@ -55,12 +58,13 @@ class BaseUtil:
                 # Assume that it isn't nested.
                 obj_key.append((key, type(val), tuple(val)))
             elif type(val) is dict:
-                obj_key.append((key, dict, tuple(val.keys()), tuple(val.values())))
+                obj_key.append(
+                    (key, dict, tuple(val.keys()), tuple(val.values())))
             else:
                 obj_key.append((key, val))
-        
+
         return tuple(obj_key)
-    
+
     @staticmethod
     def to_type_dict(val: Any | type | types.GenericAlias | typing._GenericAlias) -> dict[str, str]:
         if type(val) in [type, EnumMeta]:
@@ -69,7 +73,8 @@ class BaseUtil:
                 '_qualname': val.__qualname__
             }
             if hasattr(val, '__orig_class__'):
-                typeDict['_orig_class'] = BaseUtil.to_type_dict(getattr(val, '__orig_class__'))
+                typeDict['_orig_class'] = BaseUtil.to_type_dict(
+                    getattr(val, '__orig_class__'))
             return typeDict
         elif type(val) in [types.GenericAlias, typing._GenericAlias]:
             return {
@@ -87,21 +92,23 @@ class BaseUtil:
                 typeDict = BaseUtil.to_type_dict(type(val))
                 # typeDict['isOrigClass'] = False
             return typeDict
-    
+
     @staticmethod
     def from_type_dict(type_dict: dict[str, str]) -> type | types.GenericAlias | typing._GenericAlias:
         _module = type_dict['_module']
         _qualname = type_dict['_qualname']
-        _qualnameParts = _qualname.split('.') # Can sometimes be ClassA.ClassB.ClassC
+        # Can sometimes be ClassA.ClassB.ClassC
+        _qualnameParts = _qualname.split('.')
         cls = getattr(
             importlib.import_module(_module),
             _qualnameParts[0]
         )
         for part in _qualnameParts[1:]:
             cls = getattr(cls, part)
-        
+
         if '_args' in type_dict:
-            args = tuple([BaseUtil.from_type_dict(arg_dict) for arg_dict in type_dict['_args']])
+            args = tuple([BaseUtil.from_type_dict(arg_dict)
+                         for arg_dict in type_dict['_args']])
             cls = cls[args]
         return cls
 
@@ -113,7 +120,7 @@ class BaseUtil:
             for key, val in func.keywords.items():
                 if hasattr(val, 'to_dict'):
                     keywordsDict[key] = val.to_dict()
-                elif callable(val): # Could be a callback function.
+                elif callable(val):  # Could be a callback function.
                     keywordsDict[key] = BaseUtil.to_func_dict(val)
                 else:
                     keywordsDict[key] = val
@@ -127,7 +134,7 @@ class BaseUtil:
                 _funcModule=func.__module__,
                 _funcQualname=func.__qualname__
             )
-    
+
     @staticmethod
     def from_func_dict(func_dict: dict, **kwargs) -> Callable | partial:
         module = importlib.import_module(func_dict['_funcModule'])
@@ -147,35 +154,41 @@ class BaseUtil:
                     objCls = BaseUtil.from_type_dict(val['_typedict'])
                     if objCls is ContextVarRef:
                         assert 'context' in kwargs
-                        obj = ContextVarRef.from_dict(val, context=kwargs['context'])
+                        obj = ContextVarRef.from_dict(
+                            val, context=kwargs['context'])
                     elif hasattr(objCls, 'from_dict'):
                         obj = objCls.from_dict(val)
                     else:
-                        obj = objCls(**{key0: val0 for key0, val0 in val.items() if key0 != '_typedict'})
+                        obj = objCls(
+                            **{key0: val0 for key0, val0 in val.items() if key0 != '_typedict'})
                     keywords[key] = obj
                 else:
                     if type(val) is list:
-                        val = tuple(val) # Seems like opencv's functions need tuples instead of lists.
+                        # Seems like opencv's functions need tuples instead of lists.
+                        val = tuple(val)
                     keywords[key] = val
             return partial(func, **keywords)
         else:
             return func
 
+
 class Base:
     """Base Class
     Assume that all class variables are in the parameter list of __init__
     """
+
     def __init__(self):
         pass
 
     def __str__(self) -> str:
         result = type(self).__name__
         result += "("
-        param_str_list = [f"{key}={val}" for key, val in self.__dict__.items() if key != "__orig_class__"]
+        param_str_list = [f"{key}={val}" for key,
+                          val in self.__dict__.items() if key != "__orig_class__"]
         result += ', '.join(param_str_list)
         result += ")"
         return result
-    
+
     def __repr__(self) -> str:
         return self.__str__()
 
@@ -217,13 +230,14 @@ class Base:
             }
             item_dict['_typedict'] = BaseUtil.to_type_dict(self.__orig_class__)
         return item_dict
-    
+
     @classmethod
     def from_dict(cls, item_dict: dict, **kwargs):
         assert '_typedict' in item_dict
         loaded_cls = BaseUtil.from_type_dict(item_dict['_typedict'])
         for attr in ['__module__', '__qualname__']:
-            assert getattr(cls, attr) == getattr(loaded_cls, attr), f"{cls.__name__}.{attr} != {loaded_cls.__name__}.{attr}"
+            assert getattr(cls, attr) == getattr(
+                loaded_cls, attr), f"{cls.__name__}.{attr} != {loaded_cls.__name__}.{attr}"
         constructor_params = cls.get_constructor_params()
         constructor_dict = {}
         post_construction_dict = {}
@@ -247,22 +261,26 @@ class Base:
         if '_typedict' in item_dict and '_args' in item_dict['_typedict'] and cls.__module__ != 'builtins':
             obj.__dict__['__orig_class__'] = typing._GenericAlias(
                 cls,
-                tuple([BaseUtil.from_type_dict(arg_dict) for arg_dict in item_dict['_typedict']['_args']])
+                tuple([BaseUtil.from_type_dict(arg_dict)
+                      for arg_dict in item_dict['_typedict']['_args']])
             )
         for key, val in post_construction_dict.items():
-            assert hasattr(obj, key), f"Object of type {type(obj).__name__} has no attribute '{key}'"
+            assert hasattr(
+                obj, key), f"Object of type {type(obj).__name__} has no attribute '{key}'"
             setattr(obj, key, val)
         return obj
 
     def save(self, path: str, **kwargs):
         ext = os.path.splitext(path)[1]
         if ext == '.json':
-            json.dump(self.to_dict(**kwargs), open(path, 'w'), ensure_ascii=False, sort_keys=False)
+            json.dump(self.to_dict(**kwargs), open(path, 'w'),
+                      ensure_ascii=False, sort_keys=False)
         elif ext == '.yaml':
-            yaml.dump(self.to_dict(**kwargs), open(path, 'w'), allow_unicode=True, sort_keys=False)
+            yaml.dump(self.to_dict(**kwargs), open(path, 'w'),
+                      allow_unicode=True, sort_keys=False)
         else:
             raise Exception(f"Invalid file extension: {ext}")
-    
+
     @classmethod
     def load(cls, path: str, **kwargs):
         ext = os.path.splitext(path)[1]
@@ -273,12 +291,12 @@ class Base:
         else:
             raise Exception(f"Invalid file extension: {ext}")
 
-    def _copy(self, isDeep: bool=False):
+    def _copy(self, isDeep: bool = False):
         params = self.get_constructor_params()
         constructor_dict = {}
         post_constructor_dict = {}
         for key, val in self.__dict__.items():
-            val0 = BaseUtil.smart_copy(val, isDeep=isDeep) # might be slow
+            val0 = BaseUtil.smart_copy(val, isDeep=isDeep)  # might be slow
             if key in params:
                 constructor_dict[key] = val0
             else:
@@ -296,15 +314,17 @@ class Base:
         """Deep copy. Copy to new location in memory."""
         return self._copy(isDeep=True)
 
-T = TypeVar('T', bound=Base) # T can only be Base or a subtype of Base
+
+T = TypeVar('T', bound=Base)  # T can only be Base or a subtype of Base
+
 
 class BaseHandler(Generic[T]):
-    def __init__(self, _objects: list[T]=None):
+    def __init__(self, _objects: list[T] = None):
         self._objects = _objects if _objects is not None else []
-    
+
     def __str__(self) -> str:
         return f"[{', '.join([obj.__str__() for obj in self])}]"
-    
+
     def __repr__(self) -> str:
         return self.__str__()
 
@@ -336,13 +356,14 @@ class BaseHandler(Generic[T]):
     def __iter__(self) -> Generator[T]:
         for i in range(len(self)):
             yield self[i]
-    
+
     def __getitem__(self, idx):
         if type(idx) is int:
             return self._objects[idx]
         elif type(idx) is slice:
             params = self.get_constructor_params()
-            result = type(self)(**{key: val for key, val in self.__dict__.items() if key in params})
+            result = type(self)(
+                **{key: val for key, val in self.__dict__.items() if key in params})
             result._objects = result._objects[idx.start:idx.stop:idx.step]
             for key, val in self.__dict__.items():
                 if key not in params:
@@ -350,7 +371,7 @@ class BaseHandler(Generic[T]):
             return result
         else:
             raise TypeError
-    
+
     def __setitem__(self, idx, value):
         if type(idx) is int:
             self._objects[idx] = value
@@ -383,12 +404,12 @@ class BaseHandler(Generic[T]):
         else:
             raise TypeError
 
-    def _copy(self, isDeep: bool=False):
+    def _copy(self, isDeep: bool = False):
         params = self.get_constructor_params()
         constructor_dict = {}
         post_constructor_dict = {}
         for key, val in self.__dict__.items():
-            val0 = BaseUtil.smart_copy(val, isDeep=isDeep) # might be slow
+            val0 = BaseUtil.smart_copy(val, isDeep=isDeep)  # might be slow
             if key in params:
                 constructor_dict[key] = val0
             else:
@@ -406,7 +427,7 @@ class BaseHandler(Generic[T]):
         """Deep copy. Copy to new location in memory."""
         return self._copy(isDeep=True)
 
-    def get(self, func: Callable[[T], bool]=None, **kwargs) -> T | None:
+    def get(self, func: Callable[[T], bool] = None, **kwargs) -> T | None:
         if func is not None:
             for obj in self:
                 if func(obj):
@@ -421,8 +442,8 @@ class BaseHandler(Generic[T]):
                 if is_match:
                     return obj
         return None
-    
-    def search(self, func: Callable[[T], bool]=None, **kwargs):
+
+    def search(self, func: Callable[[T], bool] = None, **kwargs):
         objects: list[T] = []
         if func is not None:
             for i, obj in enumerate(self):
@@ -438,14 +459,32 @@ class BaseHandler(Generic[T]):
                 if is_match:
                     objects.append(obj)
         return type(self)(objects)
-    
+
+    @overload
+    def sort(self, key: Callable[[T], Any], reverse: bool = False): ...
+
+    @overload
+    def sort(self, attrName: str = None, reverse: bool = False): ...
+
+    def sort(self, key: Callable[[T], Any] = None, attrName: str = None, reverse: bool = False):
+        if key is not None:
+            self._objects.sort(key=key, reverse=reverse)
+        elif attrName is not None:
+            self._objects.sort(
+                key=operator.attrgetter(attrName),
+                reverse=reverse
+            )
+        else:
+            raise Exception("Must provide either key or attrName parameter.")
+
     @classmethod
     def get_constructor_params(cls) -> list[str]:
         return [param for param in list(inspect.signature(cls.__init__).parameters.keys()) if param != 'self']
 
     def _to_dict_compressed(self, **kwargs) -> dict:
         _typedict: dict = BaseUtil.to_type_dict(self)
-        obj_typedict: dict = BaseUtil.to_type_dict(self[0]) if len(self) > 0 else None
+        obj_typedict: dict = BaseUtil.to_type_dict(
+            self[0]) if len(self) > 0 else None
         if '_args' in _typedict:
             del _typedict['_args']
 
@@ -491,7 +530,7 @@ class BaseHandler(Generic[T]):
                 item_dict[key] = val
         return item_dict
 
-    def to_dict(self, compressed: bool=True, **kwargs) -> dict:
+    def to_dict(self, compressed: bool = True, **kwargs) -> dict:
         if compressed:
             return self._to_dict_compressed(**kwargs)
         else:
@@ -536,7 +575,7 @@ class BaseHandler(Generic[T]):
                 else:
                     post_construction_dict[key] = val
         obj = cls(**constructor_dict)
-        
+
         if '_typedict' in item_dict and '_args' in item_dict['_typedict'] and cls.__module__ != 'builtins':
             obj.__dict__['__orig_class__'] = typing._GenericAlias(
                 cls,
@@ -545,7 +584,8 @@ class BaseHandler(Generic[T]):
             )
 
         for key, val in post_construction_dict.items():
-            assert hasattr(obj, key), f"{type(obj).__name__} has no attribute {key}"
+            assert hasattr(
+                obj, key), f"{type(obj).__name__} has no attribute {key}"
             setattr(obj, key, val)
         return obj
 
@@ -584,20 +624,22 @@ class BaseHandler(Generic[T]):
                 else:
                     post_construction_dict[key] = val
         obj = cls(**constructor_dict)
-        
+
         if '_typedict' in item_dict and '_args' in item_dict['_typedict'] and cls.__module__ != 'builtins':
             obj.__dict__['__orig_class__'] = typing._GenericAlias(
                 cls,
-                tuple([BaseUtil.from_type_dict(arg_dict) for arg_dict in item_dict['_typedict']['_args']])
+                tuple([BaseUtil.from_type_dict(arg_dict)
+                      for arg_dict in item_dict['_typedict']['_args']])
             )
 
         for key, val in post_construction_dict.items():
-            assert hasattr(obj, key), f"{type(obj).__name__} has no attribute {key}"
+            assert hasattr(
+                obj, key), f"{type(obj).__name__} has no attribute {key}"
             setattr(obj, key, val)
         return obj
 
     @classmethod
-    def from_dict(cls, item_dict: dict, compressed: bool=True, **kwargs):
+    def from_dict(cls, item_dict: dict, compressed: bool = True, **kwargs):
         if compressed:
             return cls._from_dict_compressed(item_dict, **kwargs)
         else:
@@ -605,16 +647,16 @@ class BaseHandler(Generic[T]):
 
     def append(self, obj: T):
         self._objects.append(obj)
-    
+
     def remove(self, obj: T):
         self._objects.remove(obj)
 
-    def pop(self, idx: int=None) -> T:
+    def pop(self, idx: int = None) -> T:
         if idx is None:
             idx = len(self._objects) - 1
         return self._objects.pop(idx)
 
-    def index(self, i: T | Callable[[T], bool]=None, **kwargs) -> int:
+    def index(self, i: T | Callable[[T], bool] = None, **kwargs) -> int:
         if len(self) == 0:
             raise IndexError(f"{type(self).__name__} is empty.")
         elif i is not None:
@@ -645,12 +687,14 @@ class BaseHandler(Generic[T]):
     def save(self, path: str, **kwargs):
         ext = os.path.splitext(path)[1]
         if ext == '.json':
-            json.dump(self.to_dict(**kwargs), open(path, 'w'), ensure_ascii=False, sort_keys=False)
+            json.dump(self.to_dict(**kwargs), open(path, 'w'),
+                      ensure_ascii=False, sort_keys=False)
         elif ext == '.yaml':
-            yaml.dump(self.to_dict(**kwargs), open(path, 'w'), allow_unicode=True, sort_keys=False)
+            yaml.dump(self.to_dict(**kwargs), open(path, 'w'),
+                      allow_unicode=True, sort_keys=False)
         else:
             raise Exception(f"Invalid file extension: {ext}")
-    
+
     @classmethod
     def load(cls, path: str, **kwargs):
         ext = os.path.splitext(path)[1]
@@ -661,27 +705,32 @@ class BaseHandler(Generic[T]):
         else:
             raise Exception(f"Invalid file extension: {ext}")
 
-H = TypeVar('H', bound=BaseHandler) # H can only be BaseHandler or a subtype of BaseHandler
+
+# H can only be BaseHandler or a subtype of BaseHandler
+H = TypeVar('H', bound=BaseHandler)
+
 
 class BaseObject(Base):
     def __init__(self):
         super().__init__()
         self.id = uuid.uuid4()
-    
+
     def to_dict(self, **kwargs) -> dict:
         item_dict = super().to_dict(**kwargs)
         item_dict['id'] = item_dict['id'].hex
         return item_dict
-    
+
     @classmethod
     def from_dict(cls, item_dict: dict, **kwargs):
         item_dict['id'] = uuid.UUID(item_dict['id'])
         return super().from_dict(item_dict, **kwargs)
 
+
 OBJ = TypeVar('OBJ', bound=BaseObject)
 
+
 class BaseObjectHandler(BaseHandler[OBJ]):
-    def __init__(self, _objects: list[OBJ]=None):
+    def __init__(self, _objects: list[OBJ] = None):
         super().__init__(_objects)
         self.id = uuid.uuid4()
 
@@ -689,13 +738,15 @@ class BaseObjectHandler(BaseHandler[OBJ]):
         item_dict = super().to_dict(**kwargs)
         item_dict['id'] = item_dict['id'].hex
         return item_dict
-    
+
     @classmethod
     def from_dict(cls, item_dict: dict, **kwargs):
         item_dict['id'] = uuid.UUID(item_dict['id'])
         return super().from_dict(item_dict, **kwargs)
 
+
 OBJ_H = TypeVar('OBJ_H', bound=BaseObjectHandler)
+
 
 class BaseEnum(Enum):
     def to_dict(self) -> dict:
@@ -703,12 +754,14 @@ class BaseEnum(Enum):
             name=self.name,
             _typedict=BaseUtil.to_type_dict(type(self))
         )
-    
+
     @classmethod
     def from_dict(cls, item_dict: dict):
         return cls[item_dict['name']]
 
+
 ContextVar = T | H | OBJ | OBJ_H
+
 
 class Context:
     """
@@ -720,9 +773,11 @@ class Context:
     In order to mitigate this problem, instead of serializing the LoadableImageMaskHandler directly in the overlay_image function callback,
     we could serialize it in the context and reference a unique id in the overlay_image function callback instead. 
     """
-    def __init__(self, _vars: dict[uuid.UUID, ContextVar]=None):
-        self._vars: dict[uuid.UUID, ContextVar] = _vars if _vars is not None else {}
-    
+
+    def __init__(self, _vars: dict[uuid.UUID, ContextVar] = None):
+        self._vars: dict[uuid.UUID,
+                         ContextVar] = _vars if _vars is not None else {}
+
     def to_dict(self) -> dict:
         return dict(
             _typedict=BaseUtil.to_type_dict(type(self)),
@@ -747,7 +802,7 @@ class Context:
         varId = uuid.uuid4()
         self._vars[varId] = var
         return ContextVarRef(varId=varId, context=self)
-    
+
     def unregister_variable(self, value: uuid.UUID | ContextVarRef):
         if type(value) is uuid.UUID:
             varId = value
@@ -756,14 +811,16 @@ class Context:
         else:
             raise TypeError
         del self._vars[varId]
-    
+
     def clear(self):
         self._vars.clear()
+
 
 class ContextVarRef:
     """This is a reference to a variable in the context.
     It is meant to be used together with an existing context.
     """
+
     def __init__(self, varId: uuid.UUID, context: Context):
         self.varId = varId
         self.context = context

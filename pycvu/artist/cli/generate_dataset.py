@@ -41,6 +41,11 @@ def get_args() -> argparse.Namespace:
         default=1
     )
     parser.add_argument(
+        "--combineResults", action="store_true",
+        help="Whether or not you want to combine all of the generated datasets together.",
+        default=False
+    )
+    parser.add_argument(
         "--width", type=int,
         help="The width of the images to be generated.",
         default=500
@@ -89,6 +94,7 @@ artist.src = bg
 
 artist.generate_dataset(
     frames=args.frames, repeat=args.repeat,
+    combineResults=args.combineResults,
     dumpDir=args.dumpDir,
-    showPbar=args.showPbar
+    showPbar=args.showPbar,
 )
