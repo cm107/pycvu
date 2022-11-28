@@ -5,11 +5,17 @@ from detectron2.data import MetadataCatalog
 # from detectron2.engine import DefaultTrainer
 from detectron2.engine import DefaultPredictor
 from detectron2.utils.visualizer import Visualizer
-from pycvu.coco.object_detection import Dataset
 from pycvu.vis.cv import SimpleVisualizer
 import random
 import cv2
 import glob
+
+"""
+TODO:   For now, set up a simple evaluation script.
+        I need to set up an evaluation that can help show the weaknesses of the current model.
+        This should help me decide what changes to make during the next training session.
+        By the looks of it right now, it seems like I may have to introduce some image augmentations to pick up the cases that aren't being detected?
+"""
 
 target = 'hanko'
 
@@ -44,6 +50,7 @@ with vis.loop(random.sample(imgPaths, 20)) as loop:
         path = loop._iter[loop.index]
         img = cv2.imread(path)
         outputs = predictor(img)
+        instances = outputs["instances"].to("cpu")
         v = Visualizer(img[:, :, ::-1], metadata=metadata, scale=1.0)
-        out = v.draw_instance_predictions(outputs["instances"].to("cpu"))
+        out = v.draw_instance_predictions(instances)
         vis.show(out.get_image()[:, :, ::-1], title="infer")

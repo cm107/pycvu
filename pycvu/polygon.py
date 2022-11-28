@@ -2,6 +2,7 @@ from __future__ import annotations
 import numpy as np
 import numpy.typing as npt
 from typing import Generator, cast, Callable
+from pyevu import Vector2, BBox2D
 
 from .base import Base, BaseHandler
 from .vector import Vector
@@ -88,6 +89,15 @@ class Polygon(Base):
         else:
             raise TypeError
 
+    @property
+    def bbox2d(self) -> BBox2D:
+        x = self.data[0::2]
+        y = self.data[1::2]
+        return BBox2D(
+            Vector2(min(x), min(y)),
+            Vector2(max(x), max(y))
+        )
+
     @staticmethod
     def debug():
         poly = Polygon([0,1,2,3,4,5,6,7,8,9])
@@ -127,3 +137,17 @@ class Segmentation(BaseHandler[Polygon]):
             if condition(seg[i]):
                 del seg[i]
         return seg
+    
+    @property
+    def bbox2d(self) -> BBox2D:
+        assert len(self) > 0
+        bbox = self[0].bbox2d
+        for poly in self[1:]:
+            bbox = BBox2D.Union(bbox, poly.bbox2d)
+        return bbox
+
+    @property
+    def bbox(self) -> tuple[int, int, int, int]:
+        """This is the bbox in coco format."""
+        bbox = self.bbox2d
+        return [bbox.v0.x, bbox.v1.y, bbox.xInterval.length, bbox.yInterval.length]

@@ -9,6 +9,10 @@ class ObjectDetection:
     from .object_detection import Category
     from .object_detection import Categories
     from .object_detection import Dataset
+    from .object_detection import BBoxResult
+    from .object_detection import SegmentationResult
+    from .object_detection import Result
+    from .object_detection import Results
 
 class KeypointDetection:
     from .keypoint_detection import Info
