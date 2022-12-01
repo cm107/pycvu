@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import Callable
 from datetime import datetime
+from functools import partial
 import os
 import time
 import copy
@@ -505,9 +506,12 @@ class Dataset(CocoBase):
 
         showResult: bool = True
         resultColor: bool = (255, 0, 0)
+        showResultLabel: bool = False
+        showResultScore: bool = True
 
     def show_preview(self, results: Results=None):
-        from ..util import CvUtil, PilUtil
+        from ..util import CvUtil, PilUtil, MaskUtil, \
+            VectorVar, ColorVar
         from ..polygon import Segmentation
         from pyevu import BBox2D, Vector2
         import cv2
@@ -556,11 +560,41 @@ class Dataset(CocoBase):
                             bbox.center), color=s.labelColor)
                     
                 if results is not None and s.showResult:
+                    def draw_result_text(
+                        img: np.ndarray, r: Result,
+                        showLabel: bool=False, showScore: bool=True
+                    ) -> np.ndarray:
+                        if not showLabel and not showScore:
+                            return img
+                        if type(r) is BBoxResult:
+                            bbox = BBox2D(
+                                Vector2(*r.bbox[:2]), Vector2(*r.bbox[:2]) + Vector2(*r.bbox[2:]))
+                        elif type(r) is SegmentationResult:
+                            seg = Segmentation.from_coco(r.segmentation)
+                            bbox = seg.bbox2d
+                        else:
+                            raise TypeError
+                        
+                        text = ''
+                        if showLabel:
+                            cat = self.categories.get(lambda cat: cat.id == r.category_id)
+                            assert cat is not None
+                            text += cat.name
+                        if showScore:
+                            if showLabel:
+                                text += ' '
+                            text += str(round(r.score, 2))
+                        img = CvUtil.bbox_text(
+                            img=img, text=text, bbox=bbox,
+                            color=s.resultColor
+                        )
+                        return img
+
                     for r in results.search(lambda r: r.image_id == image.id):
                         cat = self.categories.get(lambda cat: cat.id == r.category_id)
                         assert cat is not None
                         if type(r) is BBoxResult:
-                            if not s.showBBox:
+                            if not s.showBBox or r.bbox is None:
                                 continue
                             bbox = BBox2D(
                                 Vector2(*r.bbox[:2]), Vector2(*r.bbox[:2]) + Vector2(*r.bbox[2:]))
@@ -571,7 +605,7 @@ class Dataset(CocoBase):
                                 thickness=2, lineType=cv2.LINE_AA
                             )
                         elif type(r) is SegmentationResult:
-                            if not s.showSeg:
+                            if not s.showSeg or r.segmentation is None:
                                 continue
                             seg = Segmentation.from_coco(r.segmentation)
                             if not s.segIsTransparent:
@@ -585,8 +619,13 @@ class Dataset(CocoBase):
                                     src1=img, src2=mask, alpha=1, beta=1, gamma=0)
                         else:
                             raise TypeError
+                        if s.showResultLabel or s.showResultScore:
+                            img = draw_result_text(
+                                img=img, r=r,
+                                showLabel=s.showResultLabel, showScore=s.showResultScore
+                            )
 
-                vis.show(img, title=f'image.id={image.id}')
+                vis.show(img, title=f'image.id={image.id}, filename={os.path.basename(image.file_name)}')
 
 class BBoxResult(CocoBase):
     def __init__(

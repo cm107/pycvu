@@ -64,12 +64,7 @@ class Mask(Base): # TODO: Need an optional category label here for the sake of m
     
     @property
     def bbox(self) -> BBox2D:
-        if self._mask is None:
-            return None
-        y, x = np.where(self._mask)
-        if len(x) == 0 or len(y) == 0:
-            return None
-        return BBox2D(Vector2(x.min().tolist(), y.min().tolist()), Vector2(x.max().tolist(), y.max().tolist()))
+        return MaskUtil.bbox_from_mask(self._mask)
 
     @property
     def contours(self):

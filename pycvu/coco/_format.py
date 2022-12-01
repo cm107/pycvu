@@ -16,7 +16,8 @@ class CocoBase(Base):
     
     @classmethod
     def from_dict(cls, item_dict: dict):
-        return cls(**item_dict)
+        constr_params = cls.get_constructor_params()
+        return cls(**{key: val for key, val in item_dict.items() if key in constr_params})
 
 T = TypeVar('T', bound=CocoBase)
 class CocoBaseHandler(BaseHandler[T]):
@@ -70,7 +71,8 @@ class Info(CocoBase):
     def from_dict(cls, item_dict: dict) -> Info:
         params = item_dict.copy()
         if params['date_created'] is not None:
-            params['date_created'] = datetime.fromtimestamp(params['date_created'])
+            if type(params['date_created']) is int:
+                params['date_created'] = datetime.fromtimestamp(params['date_created'])
         return Info(**params)
 
 class Image(CocoBase):
@@ -94,7 +96,8 @@ class Image(CocoBase):
     def from_dict(cls, item_dict: dict) -> Image:
         params = item_dict.copy()
         if params['date_captured'] is not None:
-            params['date_captured'] = datetime.fromtimestamp(params['date_captured'])
+            if type(params['date_captured']) is int:
+                params['date_captured'] = datetime.fromtimestamp(params['date_captured'])
         return Image(**params)
 
 class Images(CocoBaseHandler[Image]):

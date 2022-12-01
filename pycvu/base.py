@@ -283,6 +283,8 @@ class Base:
 
     @classmethod
     def load(cls, path: str, **kwargs):
+        if not os.path.isfile(path):
+            raise FileNotFoundError(path)
         ext = os.path.splitext(path)[1]
         if ext == '.json':
             return cls.from_dict(json.load(open(path, 'r')), **kwargs)
@@ -697,6 +699,8 @@ class BaseHandler(Generic[T]):
 
     @classmethod
     def load(cls, path: str, **kwargs):
+        if not os.path.isfile(path):
+            raise FileNotFoundError(path)
         ext = os.path.splitext(path)[1]
         if ext == '.json':
             return cls.from_dict(json.load(open(path, 'r')), **kwargs)

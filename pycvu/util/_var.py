@@ -5,7 +5,7 @@ import random
 from PIL import Image as pilImage
 import numpy as np
 import numpy.typing as npt
-
+from pyevu.vector2 import Vector2
 from pycvu.interval import Interval
 
 from ..color import Color, HSV
@@ -28,7 +28,7 @@ __all__ = [
 ]
 
 StringVar = str | TextGenerator | TextSampler
-VectorVar = tuple[int, int] | Vector | Interval
+VectorVar = tuple[int, int] | Vector | Vector2 | Interval
 ImageVectorCallback = Callable[[np.ndarray], VectorVar]
 PilImageVectorCallback = Callable[[pilImage.Image], VectorVar]
 ColorVar = tuple[int, int, int] | Color | HSV | Interval

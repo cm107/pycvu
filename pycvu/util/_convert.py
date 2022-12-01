@@ -6,6 +6,7 @@ import cv2
 from PIL import Image as pilImage
 import numpy as np
 import numpy.typing as npt
+from pyevu.vector2 import Vector2
 
 from pycvu.interval import Interval
 
@@ -92,7 +93,7 @@ class Convert:
     @staticmethod
     def cast_vector(value: VectorVar) -> tuple[int, int]:
         result = copy.deepcopy(value)
-        if type(result) is Vector:
+        if type(result) in [Vector, Vector2]:
             result = tuple(result)
         elif type(result) is Interval:
             result = tuple(result.random())

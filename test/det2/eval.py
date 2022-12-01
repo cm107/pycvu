@@ -1,3 +1,4 @@
+from __future__ import annotations
 from detectron2.config import get_cfg
 from detectron2 import model_zoo
 from detectron2.data.datasets import register_coco_instances
@@ -7,144 +8,314 @@ from detectron2.engine import DefaultPredictor
 from detectron2.utils.visualizer import Visualizer
 from pycvu.coco.object_detection import *
 from pycvu.vis.cv import SimpleVisualizer
+from pycvu.base import Base
 import random
 import cv2
 import os
 import glob
+from tqdm import tqdm
 from pyevu import Vector2, BBox2D
-
-target = 'hanko'
-
-cfg = get_cfg()
-if False:
-    cfg.merge_from_file(model_zoo.get_config_file("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml"))
-    cfg.MODEL.WEIGHTS = f"{target}_output0/model_final.pth"
-    # cfg.MODEL.WEIGHTS = "waku_output/model_final.pth"
-    cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.7
-    # cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.1
-
-    cfg.INPUT.MIN_SIZE_TEST = 1600
-    cfg.INPUT.MAX_SIZE_TEST = 5000
-
-    predictor = DefaultPredictor(cfg)
-
-    # register_coco_instances(
-    #     name=f'{target}_train',
-    #     metadata={},
-    #     json_file=f'../datasetDump/{target}Dataset.json',
-    #     image_root='..'
-    # )
-    # metadata = MetadataCatalog.get(f"{target}_train")
-else:
-    cfg.merge_from_file(model_zoo.get_config_file("Misc/cascade_mask_rcnn_R_50_FPN_3x.yaml"))
-    cfg.MODEL.WEIGHTS = "/home/clayton/workspace/prj/data/MediaTech/250_終了時点ファイル/weight_20220715_iter10000_hanko_name/model_final.pth"
-    cfg.INPUT.MIN_SIZE_TEST = 1600
-    cfg.INPUT.MAX_SIZE_TEST = 5000
-    cfg.MODEL.ROI_HEADS.NUM_CLASSES = 2
-    cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.7
-
-    predictor = DefaultPredictor(cfg)
-
-gt = Dataset.from_labelme('/home/clayton/workspace/prj/mediatech_poc2/main/img/json', allowNoAnn=True)
-gt.filter(catFilter=lambda cat: cat.name == target, reindex=True, applyToSelf=True, cleanupImg=False)
-dt = Results()
-print(f"{gt.categories=}")
-
-for image in gt.images:
-    img = cv2.imread(image.file_name)
-    h, w = img.shape[:2]
-    img[:int(h*0.75), :int(w*0.75), :] = (255, 255, 255)
-    outputs = predictor(img)
-    instances = outputs["instances"].to("cpu")
-    for box, score, catId in zip(
-        instances._fields['pred_boxes'].tensor.tolist(),
-        instances._fields['scores'].tolist(),
-        instances._fields['pred_classes'].tolist()
-    ):
-        box = [int(val) for val in box]
-        bbox = BBox2D(Vector2(*box[:2]), Vector2(*box[2:]))
-        result = BBoxResult(
-            image_id=image.id, category_id=catId,
-            bbox=[bbox.v0.x, bbox.v0.y, bbox.xInterval.length, bbox.yInterval.length],
-            score=score
-        )
-        dt.append(result)
-
-dt = dt.search(lambda r: r.category_id == 0)
 from pycocotools.coco import COCO
 from pycocotools.cocoeval import COCOeval
-gt.save('/tmp/gt.json')
-dt.save('/tmp/dt.json')
-dt.to_annotations(minPairingIoU=0.5).save('/tmp/dt_ann.json')
+from enum import Enum
+from datetime import datetime
 
-gt.show_preview(results=dt)
+class EvalConfig(Base):
+    def __init__(
+        self,
+        modelZooConfig: str, weights: str,
+        minSizeTest: int, maxSizeTest: int,
+        scoreThreshTest: float,
+        names: list[str],
+        targetName: str, gtLabelmeDir: str
+    ):
+        self.modelZooConfig = modelZooConfig
+        self.weights = weights
+        self.minSizeTest = minSizeTest
+        self.maxSizeTest = maxSizeTest
+        self.scoreThreshTest = scoreThreshTest
+        self.names = names
+        
+        self.targetName = targetName
+        self.gtLabelmeDir = gtLabelmeDir
 
-cocoGt = COCO('/tmp/gt.json')
-cocoDt = cocoGt.loadRes('/tmp/dt.json')
-cocoeval = COCOeval(
-    cocoGt=cocoGt,
-    cocoDt=cocoDt,
-    iouType='bbox'
-)
-cocoeval.evaluate()
-cocoeval.accumulate()
-cocoeval.summarize()
-
-# Infer new annotations
-inferNewAnn = True
-newLimit = 20
-if inferNewAnn:
-    imgDir = '/home/clayton/workspace/prj/mediatech_poc2/main/img'
-    imgPaths = sorted(glob.glob(f"{imgDir}/*.png"))
-    doneFilenames = [os.path.basename(image.file_name) for image in gt.images]
-    imgPaths = [imgPath for imgPath in imgPaths if os.path.basename(imgPath) not in doneFilenames]
-    imgPaths = imgPaths[:newLimit]
-
-    newDataset = Dataset()
-    from datetime import datetime
-    import time
-    newDataset.info.date_created = datetime.now()
-    newDataset.info.year = datetime.now().year
-    newDataset.info.description = "Inferred results. Needs editing."
-    newDataset.licenses = gt.licenses.copy()
-    newDataset.categories = gt.categories.copy()
-
-    for imgPath in imgPaths:
-        newDt = Results()
-        newDt._objects.clear()
-        img = cv2.imread(imgPath)
-        h, w = img.shape[:2]
-        img[:int(h*0.75), :int(w*0.75), :] = (255, 255, 255)
-        image = Image(
-            id=len(newDataset.images),
-            width=img.shape[1], height=img.shape[0],
-            file_name=imgPath,
-            license=0,
-            date_captured=datetime.fromtimestamp(
-                time.mktime(time.gmtime(os.path.getctime(imgPath)))
-            )
+    @classmethod
+    @property
+    def kume_hanko(self) -> EvalConfig:
+        """
+        Trained by kume with Kume's dataset using Misc/cascade_mask_rcnn_R_50_FPN_3x.
+        Performs well.
+        """
+        return EvalConfig(
+            modelZooConfig="Misc/cascade_mask_rcnn_R_50_FPN_3x.yaml",
+            weights="/home/clayton/workspace/prj/data/MediaTech/250_終了時点ファイル/weight_20220715_iter10000_hanko_name/model_final.pth",
+            minSizeTest=1600, maxSizeTest=5000,
+            scoreThreshTest=0.7,
+            names=['hanko', 'name'], targetName='hanko',
+            gtLabelmeDir='/home/clayton/workspace/prj/mediatech_poc2/main/img/json'
         )
-        newDataset.images.append(image)
-        outputs = predictor(img)
-        instances = outputs["instances"].to("cpu")
-        for box, score, catId in zip(
-            instances._fields['pred_boxes'].tensor.tolist(),
-            instances._fields['scores'].tolist(),
-            instances._fields['pred_classes'].tolist()
-        ):
-            box = [int(val) for val in box]
-            bbox = BBox2D(Vector2(*box[:2]), Vector2(*box[2:]))
-            result = BBoxResult(
-                image_id=image.id, category_id=catId,
-                bbox=[bbox.v0.x, bbox.v0.y, bbox.xInterval.length, bbox.yInterval.length],
-                score=score
+
+    @classmethod
+    @property
+    def kume_hanko_retrain(self) -> EvalConfig:
+        """
+        Retrained by Clayton with Kume's dataset using Misc/cascade_mask_rcnn_R_50_FPN_3x.
+        Doesn't perform as well as kume_hanko, but still quite well.
+        Could probably perform better with more training.
+        """
+        return EvalConfig(
+            modelZooConfig="Misc/cascade_mask_rcnn_R_50_FPN_3x.yaml",
+            weights="/home/clayton/workspace/prj/mediatech_poc2/main/output_hanko/model_final.pth",
+            minSizeTest=1600, maxSizeTest=5000,
+            scoreThreshTest=0.7,
+            names=['hanko', 'name'], targetName='hanko',
+            gtLabelmeDir='/home/clayton/workspace/prj/mediatech_poc2/main/img/json'
+        )
+
+    @classmethod
+    @property
+    def new_hanko(self) -> EvalConfig:
+        """
+        Trained by Clayton with custom dataset using COCO-Detection/faster_rcnn_R_50_FPN_3x.
+        Using same augmentation settings as Kume's model.
+        Possible causes of poor performance:
+        * Dataset is bad.
+        * COCO-Detection/faster_rcnn_R_50_FPN_3x isn't good enough.
+        * Need to train longer?
+        * After looking at the augmentation preview, it looks like the hanko being occluded by other shapes may be causing problems.
+
+        TODO: Try training with Kume's dataset but with COCO-Detection/faster_rcnn_R_50_FPN_3x.
+        TODO: Try getting rid of occlusion on hanko data in my dataset and train again.
+        """
+        return EvalConfig(
+            modelZooConfig="COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml",
+            weights=f"train_output/hanko_output-kumeaug-00/model_final.pth",
+            minSizeTest=1600, maxSizeTest=5000,
+            scoreThreshTest=0.7,
+            names=['hanko'], targetName='hanko',
+            gtLabelmeDir='/home/clayton/workspace/prj/mediatech_poc2/main/img/json'
+        )
+
+    @classmethod
+    @property
+    def new_hanko_kume_dataset(self) -> EvalConfig:
+        """
+        Seems to detect the hanko most of the time, but there are a lot of false positives
+        with high scores. This could be due to insufficient training, or it could be a problem
+        with the model itself.
+        TODO: Train with Misc/cascade_mask_rcnn_R_50_FPN_3x.yaml with the same number of iterations.
+              If the evaluation results don't change considerably, the likely reason for the difference
+              in performance between this model and the one that Kume trained is simply insufficient training time.
+              Otherwise, Misc/cascade_mask_rcnn_R_50_FPN_3x.yaml should be utilized from now on.
+        """
+        return EvalConfig(
+            modelZooConfig="COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml",
+            weights=f"train_output/custom_hanko-kume_dataset-kumeaug-01/model_final.pth",
+            minSizeTest=1600, maxSizeTest=5000,
+            scoreThreshTest=0.7,
+            names=['hanko', 'name'], targetName='hanko',
+            gtLabelmeDir='/home/clayton/workspace/prj/mediatech_poc2/main/img/json'
+        )
+
+class CacheMode(Enum):
+    READONLY = 0
+    NEW = 1
+    UPDATE = 2
+
+class EvalSession:
+    def __init__(self, evalConfig: EvalConfig, cacheRoot: str='evalCache'):
+        self.evalConfig = evalConfig
+
+        os.makedirs(cacheRoot, exist_ok=True)
+        cacheDirs = [path for path in glob.glob(f"{cacheRoot}/*") if os.path.isdir(path) and os.path.isfile(f"{path}/config.json")]
+        matchedCacheDir: str = None
+        for cacheDir in cacheDirs:
+            existingEvalConfig = EvalConfig.load(f"{cacheDir}/config.json")
+            if existingEvalConfig == self.evalConfig:
+                matchedCacheDir = cacheDir
+                break
+        
+        if matchedCacheDir is not None:
+            self.cacheDir = matchedCacheDir
+        else:
+            self.cacheDir = f"{cacheRoot}/{int(datetime.now().timestamp() * 10**6)}"
+            os.mkdir(self.cacheDir)
+            self.evalConfig.save(f"{self.cacheDir}/config.json")
+        print(f"Cache directory: {self.cacheDir}")
+
+        self.cfg = get_cfg()
+        self.cfg.merge_from_file(model_zoo.get_config_file(evalConfig.modelZooConfig))
+        self.cfg.MODEL.WEIGHTS = evalConfig.weights
+        self.cfg.INPUT.MIN_SIZE_TEST = evalConfig.minSizeTest
+        self.cfg.INPUT.MAX_SIZE_TEST = evalConfig.maxSizeTest
+        self.cfg.MODEL.ROI_HEADS.NUM_CLASSES = len(evalConfig.names)
+        self.cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = evalConfig.scoreThreshTest
+
+        self.predictor = DefaultPredictor(self.cfg)
+        
+        self.gt: Dataset = None
+        self.dt: Results = None
+        
+    def load_gt(self, cacheMode: CacheMode=CacheMode.NEW):
+        cachePath = f'{self.cacheDir}/gt.json'
+        if cacheMode in [CacheMode.NEW, CacheMode.UPDATE]:
+            self.gt = Dataset.from_labelme(self.evalConfig.gtLabelmeDir, allowNoAnn=True)
+            self.gt.filter(
+                catFilter=lambda cat: cat.name == self.evalConfig.targetName,
+                reindex=True, applyToSelf=True, cleanupImg=False
             )
-            newDt.append(result)
-        newDt = newDt.search(lambda r: r.category_id == 0)
-        newAnns = newDt.to_annotations(minPairingIoU=0.5)
-        for newAnn in newAnns:
-            newAnn.id = len(newDataset.annotations)
-            newDataset.annotations.append(newAnn)
+            self.gt.save(cachePath)
+        elif cacheMode == CacheMode.READONLY:
+            self.gt = Dataset.load(cachePath)
+        else:
+            raise ValueError
+
+    def calc_dt(self, cacheMode: CacheMode=CacheMode.UPDATE):
+        if self.gt is None:
+            self.load_gt()
+        cachePath = f'{self.cacheDir}/dt.json'
+        if cacheMode == CacheMode.READONLY:
+            self.dt = Results.load(cachePath)
+            if not os.path.isfile(f"{self.cacheDir}/cleanDt.json"):
+                cleanDt = self.dt.search(lambda r: r.bbox is not None and r.score is not None)
+                cleanDt.save(f"{self.cacheDir}/cleanDt.json")
+        elif cacheMode in [CacheMode.NEW, CacheMode.UPDATE]:
+            if cacheMode == CacheMode.NEW:
+                self.dt = Results()
+                images = self.gt.images
+            elif cacheMode == CacheMode.UPDATE:
+                if os.path.isfile(cachePath):
+                    self.dt = Results.load(cachePath)
+                else:
+                    self.dt = Results()
+                # Loop through new images only.
+                images = self.gt.images.search(lambda image: self.dt.get(image_id=image.id) is None)
+            else:
+                raise ValueError
+            
+            for image in tqdm(images, desc="Evaluating GT"):
+                img = cv2.imread(image.file_name)
+                h, w = img.shape[:2]
+                img[:int(h*0.75), :int(w*0.75), :] = (255, 255, 255)
+                outputs = self.predictor(img)
+                instances = outputs["instances"].to("cpu")
+
+                noRelevantDet: bool = True
+                for box, score, catId in zip(
+                    instances._fields['pred_boxes'].tensor.tolist(),
+                    instances._fields['scores'].tolist(),
+                    instances._fields['pred_classes'].tolist()
+                ):
+                    box = [int(val) for val in box]
+                    bbox = BBox2D(Vector2(*box[:2]), Vector2(*box[2:]))
+                    result = BBoxResult(
+                        image_id=image.id, category_id=catId,
+                        bbox=[bbox.v0.x, bbox.v0.y, bbox.xInterval.length, bbox.yInterval.length],
+                        score=score
+                    )
+                    if result.category_id == self.evalConfig.names.index(self.evalConfig.targetName):
+                        self.dt.append(result)
+                        noRelevantDet = False
+                if noRelevantDet:
+                    result = BBoxResult(
+                        image_id=image.id, category_id=self.evalConfig.names.index(self.evalConfig.targetName),
+                        bbox=None,
+                        score=None
+                    )
+                    self.dt.append(result)
+
+            self.dt.save(f"{self.cacheDir}/dt.json")
+            cleanDt = self.dt.search(lambda r: r.bbox is not None and r.score is not None)
+            cleanDt.save(f"{self.cacheDir}/cleanDt.json")
+        else:
+            raise ValueError
     
+    def evaluate(self):
+        if self.gt is None or self.dt is None:
+            self.calc_dt()
+        
+        cocoGt = COCO(f'{self.cacheDir}/gt.json')
+        cocoDt = cocoGt.loadRes(f'{self.cacheDir}/cleanDt.json')
+        cocoeval = COCOeval(
+            cocoGt=cocoGt,
+            cocoDt=cocoDt,
+            iouType='bbox'
+        )
+        cocoeval.evaluate()
+        cocoeval.accumulate()
+        cocoeval.summarize()
     
-    newDataset.to_labelme(annDir=f"{imgDir}/json_pending", overwrite=False, allowNoAnn=True)
+    def show_eval_results(self):
+        if self.gt is None or self.dt is None:
+            self.calc_dt()
+        s = Dataset.PreviewSettings
+        s.showBBox = True
+        s.showLabel = False
+        s.showSeg = False
+        # s.showResultLabel = True
+        self.gt.show_preview(results=self.dt)
+
+    def infer_new_annotations(
+        self, newLimit: int=20,
+        wcImgPaths: str='/home/clayton/workspace/prj/mediatech_poc2/main/img/*.png',
+        labelmeAnnDir: str=f"/home/clayton/workspace/prj/mediatech_poc2/main/img/json_pending"
+    ):
+        if self.gt is None:
+            self.load_gt()
+        imgPaths = sorted(glob.glob(wcImgPaths))
+        doneFilenames = [os.path.basename(image.file_name) for image in self.gt.images]
+        imgPaths = [imgPath for imgPath in imgPaths if os.path.basename(imgPath) not in doneFilenames]
+        imgPaths = imgPaths[:newLimit]
+
+        newDataset = Dataset()
+        from datetime import datetime
+        import time
+        newDataset.info.date_created = datetime.now()
+        newDataset.info.year = datetime.now().year
+        newDataset.info.description = "Inferred results. Needs editing."
+        newDataset.licenses = self.gt.licenses.copy()
+        newDataset.categories = self.gt.categories.copy()
+
+        for imgPath in tqdm(imgPaths, desc="Inferring New"):
+            newDt = Results()
+            newDt._objects.clear()
+            img = cv2.imread(imgPath)
+            h, w = img.shape[:2]
+            img[:int(h*0.75), :int(w*0.75), :] = (255, 255, 255)
+            image = Image(
+                id=len(newDataset.images),
+                width=img.shape[1], height=img.shape[0],
+                file_name=imgPath,
+                license=0,
+                date_captured=datetime.fromtimestamp(
+                    time.mktime(time.gmtime(os.path.getctime(imgPath)))
+                )
+            )
+            newDataset.images.append(image)
+            outputs = self.predictor(img)
+            instances = outputs["instances"].to("cpu")
+            for box, score, catId in zip(
+                instances._fields['pred_boxes'].tensor.tolist(),
+                instances._fields['scores'].tolist(),
+                instances._fields['pred_classes'].tolist()
+            ):
+                box = [int(val) for val in box]
+                bbox = BBox2D(Vector2(*box[:2]), Vector2(*box[2:]))
+                result = BBoxResult(
+                    image_id=image.id, category_id=catId,
+                    bbox=[bbox.v0.x, bbox.v0.y, bbox.xInterval.length, bbox.yInterval.length],
+                    score=score
+                )
+                newDt.append(result)
+            newDt = newDt.search(lambda r: r.category_id == self.evalConfig.names.index(self.evalConfig.targetName))
+            newAnns = newDt.to_annotations(minPairingIoU=0.5)
+            for newAnn in newAnns:
+                newAnn.id = len(newDataset.annotations)
+                newDataset.annotations.append(newAnn)
+        
+        newDataset.to_labelme(annDir=labelmeAnnDir, overwrite=False, allowNoAnn=True)        
+
+session = EvalSession(EvalConfig.new_hanko_kume_dataset)
+session.evaluate()
+session.show_eval_results()
+# session.infer_new_annotations(newLimit=20)

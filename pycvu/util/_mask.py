@@ -3,6 +3,7 @@ from typing import Callable
 import cv2
 import numpy as np
 import numpy.typing as npt
+from pyevu import BBox2D, Vector2
 from ..interval import Interval
 from ..color import Color, HSV
 
@@ -50,6 +51,15 @@ class MaskUtil:
                 raise TypeError
             np_contains: Callable[[npt.NDArray[np.uint8]], npt.NDArray[np.bool_]] = np.vectorize(contains, signature='(xyz)->(xy)')
             return np_contains(img).reshape(img.shape[:2])
+
+    @staticmethod
+    def bbox_from_mask(mask: npt.NDArray[np.bool_]) -> BBox2D:
+        if mask is None:
+            return None
+        y, x = np.where(mask)
+        if len(x) == 0 or len(y) == 0:
+            return None
+        return BBox2D(Vector2(x.min().tolist(), y.min().tolist()), Vector2(x.max().tolist(), y.max().tolist()))
 
     @staticmethod
     def debug():

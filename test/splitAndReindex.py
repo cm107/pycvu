@@ -2,6 +2,22 @@ from pycvu.coco.object_detection import *
 dumpDir = 'datasetDump'
 dataset = Dataset.load(f'{dumpDir}/dataset.json')
 
+from pyevu import BBox2D, Vector2
+
+def isValidAnn(ann: Annotation) -> bool:
+    bbox = BBox2D(Vector2(*ann.bbox[:2]), Vector2(*ann.bbox[:2]) + Vector2(*ann.bbox[2:]))
+    if bbox.area <= 0:
+        return False
+    if bbox.v0.x >= bbox.v1.x or bbox.v0.y >= bbox.v1.y:
+        return False
+    return True
+
 for name in ['waku', 'hanko', 'name']:
-    d = dataset.filter(catFilter=lambda cat: cat.name == name, reindex=True, showPbar=True, leavePbar=True)
+    d = dataset.filter(
+        catFilter=lambda cat: cat.name == name,
+        annFilter=lambda ann: isValidAnn(ann),
+        reindex=True, showPbar=True, leavePbar=True
+    )
+    for ann in d.annotations:
+        ann.segmentation = []
     d.save(f"{dumpDir}/{name}Dataset.json")

@@ -304,6 +304,69 @@ class CvUtil:
         else:
             return drawCallback(img, color=color)
 
+    def bbox_text(
+        img: np.ndarray, text: StringVar,
+        bbox: BBox2D,
+        bboxWidthRatioConstraint: FloatVar=0.8,
+        bboxHeightRatioConstraint: FloatVar=0.5,
+        imageWidthRatioConstraint: FloatVar=0.01,
+        imageHeightRatioConstraint: FloatVar=0.01,
+        textUpOffsetRatio: FloatVar=0.2,
+        centerText: bool=True,
+        thicknessScale: FloatVar=2,
+        fontFace: int=cv2.FONT_HERSHEY_SIMPLEX,
+        color: ColorVar = (255, 255, 255),
+        lineType: int=None,
+        refMask: Mask=None
+    ) -> np.ndarray:
+        bboxWidthRatioConstraint = Convert.cast_builtin(bboxWidthRatioConstraint)
+        bboxHeightRatioConstraint = Convert.cast_builtin(bboxHeightRatioConstraint)
+        imageWidthRatioConstraint = Convert.cast_builtin(imageWidthRatioConstraint)
+        imageHeightRatioConstraint = Convert.cast_builtin(imageHeightRatioConstraint)
+        textUpOffsetRatio = Convert.cast_builtin(textUpOffsetRatio)
+        thicknessScale = Convert.cast_builtin(thicknessScale)
+
+        org = bbox.v0
+        baseScale = 2
+        textMaskImg = CvUtil.text(
+            img=np.zeros((500, 500, 3), dtype=np.uint8),
+            text=text, fontScale=baseScale, thickness=int(baseScale * thicknessScale),
+            org=(0, 499), color=(255,255,255),
+            fontFace=fontFace, lineType=lineType
+        )
+        textMask = MaskUtil.eq_color(textMaskImg, color=(255,255,255))
+        textBBox = MaskUtil.bbox_from_mask(textMask)
+        textWidth = textBBox.xInterval.length
+        textHeight = textBBox.yInterval.length
+        bboxWidth = bbox.xInterval.length
+        bboxHeight = bbox.yInterval.length
+        imgHeight, imgWidth = img.shape[:2]
+
+        bboxRescalingFactor = min(
+            bboxWidthRatioConstraint * bboxWidth / textWidth,
+            bboxHeightRatioConstraint * bboxHeight / textHeight
+        )
+        imageRescalingFactor = max(
+            imageWidthRatioConstraint * imgHeight / textWidth,
+            imageHeightRatioConstraint * imgWidth / textHeight
+        )
+        rescalingFactor = max(bboxRescalingFactor, imageRescalingFactor)
+        scale = rescalingFactor * baseScale
+
+        org += Vector2.down * int(textUpOffsetRatio * textHeight * rescalingFactor)
+        if centerText:
+            org += Vector2.right * int(0.5 * (bboxWidth - textWidth * rescalingFactor))
+        
+        org = tuple(org)
+        img = CvUtil.text(
+            img=img,
+            text=text, fontScale=scale, thickness=int(scale * thicknessScale),
+            org=org, color=color,
+            fontFace=fontFace, lineType=lineType,
+            refMask=refMask
+        )
+        return img
+
     @overload
     @staticmethod
     def resize(
