@@ -45,6 +45,11 @@ class Trainer(DefaultTrainer):
                     img = frame.preview_image
                     vis.show(img, f'{loop.index=}')
             break
+    
+    def train(self):
+        with open(f'{self.cfg.OUTPUT_DIR}/trainCfgSettings.txt', 'w') as f:
+            f.write(str(self.cfg))
+        super().train()
 
 class TrainConfig:
     def __init__(
@@ -107,7 +112,27 @@ class TrainConfig:
     def new_hanko_kume_dataset_cascade(cls) -> TrainConfig:
         config = TrainConfig.new_hanko_kume_dataset
         config.modelZooConfig = "Misc/cascade_mask_rcnn_R_50_FPN_3x.yaml"
-        config.outputDir = "train_output/cascade_hanko-kume_dataset-kumeaug-00"
+        config.imsPerBatch = 4
+        config.baseLr = 0.00025
+        config.outputDir = "train_output/cascade_hanko-kume_dataset-kumeaug-01"
+        return config
+
+    @classmethod
+    @property
+    def new_hanko_kume_dataset_long(cls) -> TrainConfig:
+        config = TrainConfig.new_hanko_kume_dataset
+        config.outputDir = "train_output/custom_hanko-kume_dataset-kumeaug-long-00"
+        config.checkpointPeriod = 10000
+        config.maxIter = 50000
+        return config
+
+    @classmethod
+    @property
+    def new_hanko_kume_dataset_cascade_long(cls) -> TrainConfig:
+        config = TrainConfig.new_hanko_kume_dataset_cascade
+        config.outputDir = "train_output/cascade_hanko-kume_dataset-kumeaug-long-00"
+        config.checkpointPeriod = 20000
+        config.maxIter = 100000
         return config
 
 class TrainSession:
@@ -116,6 +141,7 @@ class TrainSession:
 
         self.cfg = get_cfg()
         self.cfg.merge_from_file(model_zoo.get_config_file(self.trainConfig.modelZooConfig))
+        self.cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url(self.trainConfig.modelZooConfig)
         register_coco_instances(
             name='train',
             metadata={},
@@ -124,13 +150,14 @@ class TrainSession:
         )
 
         self.cfg.DATASETS.TRAIN = ('train',)
-        self.cfg.DATASETS.TEST = ()
+        self.cfg.DATASETS.TEST = ('train',)
         self.cfg.SOLVER.WARMUP_METHOD = "linear"
         self.cfg.SOLVER.WARMUP_FACTOR = 1.0 / self.cfg.SOLVER.WARMUP_ITERS
         self.cfg.SOLVER.BASE_LR = self.trainConfig.baseLr
         self.cfg.SOLVER.CHECKPOINT_PERIOD = self.trainConfig.checkpointPeriod
         self.cfg.SOLVER.MAX_ITER = self.trainConfig.maxIter
         self.cfg.SOLVER.IMS_PER_BATCH = self.trainConfig.imsPerBatch
+        self.cfg.SOLVER.STEPS = (30000,)
 
         self.cfg.INPUT.RANDOM_FLIP = 'none'
         self.cfg.INPUT.MIN_SIZE_TRAIN = self.trainConfig.minSizeTrain
@@ -138,6 +165,13 @@ class TrainSession:
 
         self.cfg.MODEL.ROI_HEADS.NUM_CLASSES = len(self.trainConfig.names)
         self.cfg.OUTPUT_DIR = self.trainConfig.outputDir
+
+        self.cfg.MODEL.MASK_ON     = False
+        self.cfg.MODEL.KEYPOINT_ON = False
+        self.cfg.MODEL.ROI_KEYPOINT_HEAD.NUM_KEYPOINTS = 0
+
+        self.cfg.VIS_PERIOD = 100
+        self.cfg.TEST.DETECTIONS_PER_IMAGE = 200
 
         if self.trainConfig.augConfigPath is not None:
             mapper = Mapper(self.cfg, config=self.trainConfig.augConfigPath)

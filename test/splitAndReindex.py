@@ -1,3 +1,4 @@
+import os
 from pycvu.coco.object_detection import *
 dumpDir = 'datasetDump'
 dataset = Dataset.load(f'{dumpDir}/dataset.json')
@@ -12,12 +13,23 @@ def isValidAnn(ann: Annotation) -> bool:
         return False
     return True
 
-for name in ['waku', 'hanko', 'name']:
+# for name in ['waku', 'hanko', 'name']:
+for names in [
+    ['waku'],
+    ['hanko'],
+    ['name'],
+    ['hanko', 'name']
+]:
+    namesStr = '-'.join(names)
+    print(namesStr)
+    savePath = f"{dumpDir}/{namesStr}Dataset.json"
+    if os.path.isfile(savePath):
+        continue
     d = dataset.filter(
-        catFilter=lambda cat: cat.name == name,
+        catFilter=lambda cat: cat.name in names,
         annFilter=lambda ann: isValidAnn(ann),
         reindex=True, showPbar=True, leavePbar=True
     )
     for ann in d.annotations:
         ann.segmentation = []
-    d.save(f"{dumpDir}/{name}Dataset.json")
+    d.save(savePath)

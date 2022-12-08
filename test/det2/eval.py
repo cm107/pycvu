@@ -117,6 +117,113 @@ class EvalConfig(Base):
             gtLabelmeDir='/home/clayton/workspace/prj/mediatech_poc2/main/img/json'
         )
 
+    @classmethod
+    @property
+    def new_hanko_kume_dataset_cascade(self) -> EvalConfig:
+        """
+        The performance seems even worse than before.
+        That likely means that the training time is too short.
+        """
+        return EvalConfig(
+            modelZooConfig="Misc/cascade_mask_rcnn_R_50_FPN_3x.yaml",
+            weights="train_output/cascade_hanko-kume_dataset-kumeaug-01/model_final.pth",
+            minSizeTest=1600, maxSizeTest=5000,
+            scoreThreshTest=0.7,
+            names=['hanko', 'name'], targetName='hanko',
+            gtLabelmeDir='/home/clayton/workspace/prj/mediatech_poc2/main/img/json'
+        )
+
+    @classmethod
+    @property
+    def new_hanko_kume_dataset_long(self) -> EvalConfig:
+        """Better than before, but still too many false positives."""
+        return EvalConfig(
+            modelZooConfig="COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml",
+            weights=f"train_output/custom_hanko-kume_dataset-kumeaug-long-00/model_final.pth",
+            minSizeTest=1600, maxSizeTest=5000,
+            scoreThreshTest=0.7,
+            names=['hanko', 'name'], targetName='hanko',
+            gtLabelmeDir='/home/clayton/workspace/prj/mediatech_poc2/main/img/json'
+        )
+
+    @classmethod
+    @property
+    def new_hanko_kume_dataset_cascade_long(self) -> EvalConfig:
+        """
+        Much better than before, but not as good as the one that Kume trained.
+        It is still picking up objects that look similar to a hanko, but not as much as before.
+        Kume's model was trained in 4.5 hours. There must be some difference in the training settings.
+        """
+        return EvalConfig(
+            modelZooConfig="Misc/cascade_mask_rcnn_R_50_FPN_3x.yaml",
+            weights="train_output/cascade_hanko-kume_dataset-kumeaug-long-00/model_final.pth",
+            minSizeTest=1600, maxSizeTest=5000,
+            scoreThreshTest=0.7,
+            names=['hanko', 'name'], targetName='hanko',
+            gtLabelmeDir='/home/clayton/workspace/prj/mediatech_poc2/main/img/json'
+        )
+
+    @classmethod
+    @property
+    def kk_custom_hanko_cascade(self) -> EvalConfig:
+        """
+        Trained using a custom dataset, but with kume's repository.
+        The results are much better than what was yielded by this respostory, even with the
+        exact same detectron2 cfg.
+        There must be a difference somewhere else in the repository that accounts for the
+        better performance.
+
+        Note: This is a hanko-only dataset.
+        The performance still isn't as good as the model that kume trained, which was trained
+        with both hanko and name annotations at the same time.
+
+        Next: Try training with both hanko and name annotations and see if that helps the model's
+              overall performance.
+        """
+        return EvalConfig(
+            modelZooConfig="Misc/cascade_mask_rcnn_R_50_FPN_3x.yaml",
+            weights="/home/clayton/workspace/prj/mediatech_poc2/main/custom_hanko_output-00/model_final.pth",
+            minSizeTest=1600, maxSizeTest=5000,
+            scoreThreshTest=0.7,
+            names=['hanko'], targetName='hanko',
+            gtLabelmeDir='/home/clayton/workspace/prj/mediatech_poc2/main/img/json'
+        )
+
+    @classmethod
+    @property
+    def kk_custom_hanko_name_cascade(self) -> EvalConfig:
+        """
+        Slightly better than kk_custom_hanko_cascade, but not by much.
+        """
+        return EvalConfig(
+            modelZooConfig="Misc/cascade_mask_rcnn_R_50_FPN_3x.yaml",
+            weights="/home/clayton/workspace/prj/mediatech_poc2/main/custom_hanko-name_output-00/model_final.pth",
+            minSizeTest=1600, maxSizeTest=5000,
+            scoreThreshTest=0.7,
+            names=['hanko', 'name'], targetName='hanko',
+            gtLabelmeDir='/home/clayton/workspace/prj/mediatech_poc2/main/img/json'
+        )
+
+    @classmethod
+    @property
+    def kk_mixed_hanko_name_cascade(self) -> EvalConfig:
+        """
+        Mixed custom dataset with kume's dataset. Sampled such that both are 50/50.
+        Mixing the two kinds of datasets seems to have helped.
+        The performance is quite high.
+        (Although not as high as the model that kume trained. Maybe he trained on a different dataset.)
+
+        Next: Sample some distractor objects for the next dataset.
+        """
+        return EvalConfig(
+            modelZooConfig="Misc/cascade_mask_rcnn_R_50_FPN_3x.yaml",
+            weights="/home/clayton/workspace/prj/mediatech_poc2/main/mixed_hanko-name_output-00/model_final.pth",
+            minSizeTest=1600, maxSizeTest=5000,
+            scoreThreshTest=0.7,
+            names=['hanko', 'name'], targetName='hanko',
+            gtLabelmeDir='/home/clayton/workspace/prj/mediatech_poc2/main/img/json'
+        )
+
 class CacheMode(Enum):
     READONLY = 0
     NEW = 1
@@ -150,6 +257,10 @@ class EvalSession:
         self.cfg.INPUT.MAX_SIZE_TEST = evalConfig.maxSizeTest
         self.cfg.MODEL.ROI_HEADS.NUM_CLASSES = len(evalConfig.names)
         self.cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = evalConfig.scoreThreshTest
+
+        self.cfg.MODEL.MASK_ON     = False
+        self.cfg.MODEL.KEYPOINT_ON = False
+        self.cfg.MODEL.ROI_KEYPOINT_HEAD.NUM_KEYPOINTS = 0
 
         self.predictor = DefaultPredictor(self.cfg)
         
@@ -315,7 +426,11 @@ class EvalSession:
         
         newDataset.to_labelme(annDir=labelmeAnnDir, overwrite=False, allowNoAnn=True)        
 
-session = EvalSession(EvalConfig.new_hanko_kume_dataset)
+# session = EvalSession(EvalConfig.kume_hanko)
+# session = EvalSession(EvalConfig.kume_hanko_retrain)
+# session = EvalSession(EvalConfig.kk_custom_hanko_cascade)
+# session = EvalSession(EvalConfig.kk_custom_hanko_name_cascade)
+session = EvalSession(EvalConfig.kk_mixed_hanko_name_cascade)
 session.evaluate()
 session.show_eval_results()
 # session.infer_new_annotations(newLimit=20)

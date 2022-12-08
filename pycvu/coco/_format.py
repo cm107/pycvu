@@ -64,15 +64,22 @@ class Info(CocoBase):
     def to_dict(self) -> dict:
         item_dict = self.__dict__.copy()
         if self.date_created is not None:
-            item_dict['date_created'] = self.date_created.timestamp()
+            if type(self.date_created) is datetime:
+                item_dict['date_created'] = self.date_created.timestamp()
         return item_dict
     
     @classmethod
     def from_dict(cls, item_dict: dict) -> Info:
         params = item_dict.copy()
         if params['date_created'] is not None:
-            if type(params['date_created']) is int:
+            if type(params['date_created']) is int \
+                or (
+                    type(params['date_created']) is float
+                    and params['date_created'] % 1 == 0
+                ):
                 params['date_created'] = datetime.fromtimestamp(params['date_created'])
+            else:
+                params['date_created'] = None
         return Info(**params)
 
 class Image(CocoBase):
@@ -89,7 +96,14 @@ class Image(CocoBase):
     def to_dict(self) -> dict:
         item_dict = self.__dict__.copy()
         if item_dict['date_captured'] is not None:
-            item_dict['date_captured'] = self.date_captured.timestamp()
+            if type(item_dict['date_captured']) is int \
+                or (
+                    type(item_dict['date_captured']) is float
+                    and item_dict['date_captured'] % 1 == 0
+                ):
+                item_dict['date_captured'] = self.date_captured.timestamp()
+            else:
+                item_dict['date_captured'] = None
         return item_dict
 
     @classmethod
