@@ -44,13 +44,16 @@ setup(
         'PyYAML>=6.0',
         'joblib>=1.2.0',
         'tqdm>=4.64.1',
-        'pyevu @ git+ssh://git@github.com/cm107/pyevu.git@master'
+        'pyevu @ git+ssh://git@github.com/cm107/pyevu.git@master',
+        'PyMuPDF==1.19.6',
+        'cairosvg==2.5.2'
     ],
     python_requires='>=3.10',
     entry_points={
         "console_scripts": [
             "pycvu-coco-show_preview=pycvu.coco.cli.show_preview",
-            "pycvu-artist-generate_dataset=pycvu.artist.cli.generate_dataset"
+            "pycvu-artist-generate_dataset=pycvu.artist.cli.generate_dataset",
+            "pycvu-pdf_to_png=pycvu.util.pdf.cli.pdf_to_png"
         ]
     }
 )
