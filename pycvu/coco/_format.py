@@ -3,6 +3,7 @@ from typing import Callable
 from datetime import datetime
 import copy
 from tqdm import tqdm
+import abc
 from ..base import Base, BaseHandler
 
 from typing import TypeVar
@@ -139,3 +140,43 @@ class Licenses(CocoBaseHandler[License]):
     @classmethod
     def from_dict(cls, item_dict: list[dict]) -> Licenses:
         return Licenses([License.from_dict(val) for val in item_dict])
+
+class AnnotationBase(CocoBase):
+    def __init__(
+        self, id: int, image_id: int, category_id: int
+    ):
+        self.id = id
+        self.image_id = image_id
+        self.category_id = category_id
+
+ANN = TypeVar('ANN', bound=AnnotationBase)
+
+class AnnotationsBase(CocoBaseHandler[ANN], abc.ABC):
+    def __init__(self, _objects: list[ANN] = None):
+        super().__init__(_objects)
+
+    def to_dict(self) -> list[dict]:
+        return [obj.to_dict() for obj in self]
+
+    @abc.abstractclassmethod
+    def from_dict(cls, item_dict: list[dict]):
+        raise NotImplementedError
+
+class CategoryBase(CocoBase):
+    def __init__(self, id: int, name: str, supercategory: str):
+        self.id = id
+        self.name = name
+        self.supercategory = supercategory
+
+CAT = TypeVar('CAT', bound=CategoryBase)
+
+class CategoriesBase(CocoBaseHandler[CAT]):
+    def __init__(self, _objects: list[CAT] = None):
+        super().__init__(_objects)
+
+    def to_dict(self) -> list[dict]:
+        return [obj.to_dict() for obj in self]
+
+    @abc.abstractclassmethod
+    def from_dict(cls, item_dict: list[dict]):
+        raise NotImplementedError

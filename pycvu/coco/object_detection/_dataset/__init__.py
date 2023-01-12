@@ -1,8 +1,9 @@
 from __future__ import annotations
 from ..._format import CocoBase, Info, Images, Licenses
+from ...dataset_base import DatasetBase
 from .._structs import Annotations, Categories
 
-class Dataset(CocoBase):
+class Dataset(DatasetBase):
     def __init__(
         self, info: Info = None, images: Images = None, licenses: Licenses = None,
         annotations: Annotations = None,
@@ -28,6 +29,5 @@ class Dataset(CocoBase):
         )
 
     from ._labelme import to_labelme, from_labelme
-    from ._manipulation import combine, filter, reindex
     from ._eval import FrameEvalMeta, get_frame_eval_meta
     from ._preview import PreviewSettings, show_preview

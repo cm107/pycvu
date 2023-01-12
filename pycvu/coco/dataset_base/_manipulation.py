@@ -3,21 +3,21 @@ from typing import Callable
 from datetime import datetime
 import copy
 from tqdm import tqdm
-from ..._format import CocoBase, CocoBaseHandler, Image, License
-from .._structs import Annotation, Category
+from .._format import CocoBase, CocoBaseHandler, Image, License, \
+    ANN, CAT
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from . import Dataset
+    from ._base import DS
 
 @classmethod
-def combine(cls: type[Dataset], sources: list[Dataset | str], showPbar: bool=False) -> Dataset:
+def combine(cls: type[DS], sources: list[DS | str], showPbar: bool=False) -> DS:
     combined = cls()
-    
+
     # Process Info
-    combined.info.description = "Combined dataset using pycvu."
-    combined.info.date_created = datetime.now()
-    combined.info.year = datetime.now().year
+    combined._info.description = "Combined dataset using pycvu."
+    combined._info.date_created = datetime.now()
+    combined._info.year = datetime.now().year
 
     outerPbar = tqdm(total=len(sources), leave=True) if showPbar else None
     if showPbar:
@@ -30,13 +30,13 @@ def combine(cls: type[Dataset], sources: list[Dataset | str], showPbar: bool=Fal
         else:
             raise TypeError
         
-        innerPbar = tqdm(total=len(dataset.images), leave=False) if showPbar else None
-        dataset.images.sort(lambda image: image.id)
-        for image in dataset.images:
+        innerPbar = tqdm(total=len(dataset._images), leave=False) if showPbar else None
+        dataset._images.sort(lambda image: image.id)
+        for image in dataset._images:
             # Process License
-            license = dataset.licenses.get(lambda lic: lic.id == image.license)
+            license = dataset._licenses.get(lambda lic: lic.id == image.license)
             assert license is not None
-            lic = combined.licenses.get(
+            lic = combined._licenses.get(
                 lambda lic: all([
                     getattr(lic, key) == getattr(license, key)
                     for key in license.__dict__
@@ -46,20 +46,20 @@ def combine(cls: type[Dataset], sources: list[Dataset | str], showPbar: bool=Fal
             if lic is None:
                 # New license.
                 lic = license.copy()
-                lic.id = len(combined.licenses)
-                combined.licenses.append(lic)
+                lic.id = len(combined._licenses)
+                combined._licenses.append(lic)
 
             # Process Image
             img = image.copy()
-            img.id = len(combined.images)
+            img.id = len(combined._images)
             img.license = lic.id
-            combined.images.append(img)
+            combined._images.append(img)
 
-            for annotation in dataset.annotations.search(lambda ann: ann.image_id == image.id):
+            for annotation in dataset._annotations.search(lambda ann: ann.image_id == image.id):
                 # Process Category
-                category = dataset.categories.get(lambda cat: cat.id == annotation.category_id)
+                category = dataset._categories.get(lambda cat: cat.id == annotation.category_id)
                 assert category is not None
-                cat = combined.categories.get(
+                cat = combined._categories.get(
                     lambda cat: all([
                         getattr(cat, key) == getattr(category, key)
                         for key in category.__dict__
@@ -69,15 +69,15 @@ def combine(cls: type[Dataset], sources: list[Dataset | str], showPbar: bool=Fal
                 if cat is None:
                     # New category.
                     cat = category.copy()
-                    cat.id = len(combined.categories)
-                    combined.categories.append(cat)
+                    cat.id = len(combined._categories)
+                    combined._categories.append(cat)
 
                 # Process Annotation
                 ann = annotation.copy()
-                ann.id = len(combined.annotations)
+                ann.id = len(combined._annotations)
                 ann.image_id = img.id
                 ann.category_id = cat.id
-                combined.annotations.append(ann)
+                combined._annotations.append(ann)
             if showPbar:
                 innerPbar.update()
         if showPbar:
@@ -88,16 +88,16 @@ def combine(cls: type[Dataset], sources: list[Dataset | str], showPbar: bool=Fal
     return combined
 
 def filter(
-    self: Dataset,
-    catFilter: Callable[[Category], bool]=None,
-    annFilter: Callable[[Annotation], bool]=None,
+    self: DS,
+    catFilter: Callable[[CAT], bool]=None,
+    annFilter: Callable[[ANN], bool]=None,
     imgFilter: Callable[[Image], bool]=None,
     licFilter: Callable[[License], bool]=None,
     cleanupCat: bool=True, cleanupAnn: bool=True, cleanupImg: bool=True, cleanupLic: bool=True,
     reindex: bool=False,
     showPbar: bool=False, leavePbar: bool=False,
     applyToSelf: bool=False
-) -> Dataset:
+) -> DS:
     # TODO: docstring
     # Note: Each filter affects all handlers either directly or through broken references.
     # Example: catFilter affects categories directly, and affects annotations, images, and
@@ -117,10 +117,10 @@ def filter(
     else:
         result = self
     for handler, callback in [
-        (result.categories, catFilter),
-        (result.annotations, annFilter),
-        (result.images, imgFilter),
-        (result.licenses, licFilter)
+        (result._categories, catFilter),
+        (result._annotations, annFilter),
+        (result._images, imgFilter),
+        (result._licenses, licFilter)
     ]:
         if callback is None:
             continue
@@ -143,12 +143,12 @@ def filter(
     if catFilter is not None and cleanupAnn:
         # Categories affect Annotations
         if showPbar:
-            pbar = tqdm(total=len(result.annotations), leave=leavePbar)
+            pbar = tqdm(total=len(result._annotations), leave=leavePbar)
             pbar.set_description("Cleanup Annotations w/o Categories")
-        for idx in list(range(len(result.annotations)))[::-1]:
-            ann = result.annotations[idx]
-            if result.categories.get(id=ann.category_id) is None:
-                del result.annotations[idx]
+        for idx in list(range(len(result._annotations)))[::-1]:
+            ann = result._annotations[idx]
+            if result._categories.get(id=ann.category_id) is None:
+                del result._annotations[idx]
             if showPbar:
                 pbar.update()
         if showPbar:
@@ -156,12 +156,12 @@ def filter(
     if licFilter is not None and cleanupImg:
         # Licenses affect Images
         if showPbar:
-            pbar = tqdm(total=len(result.images), leave=leavePbar)
+            pbar = tqdm(total=len(result._images), leave=leavePbar)
             pbar.set_description("Cleanup Images w/o Licenses")
-        for idx in list(range(len(result.images)))[::-1]:
-            img = result.images[idx]
-            if result.licenses.get(id=img.license) is None:
-                del result.images[idx]
+        for idx in list(range(len(result._images)))[::-1]:
+            img = result._images[idx]
+            if result._licenses.get(id=img.license) is None:
+                del result._images[idx]
             if showPbar:
                 pbar.update()
         if showPbar:
@@ -169,12 +169,12 @@ def filter(
     if annFilter is not None or catFilter is not None and cleanupImg:
         # Annotations affect Images -> Images Done
         if showPbar:
-            pbar = tqdm(total=len(result.images), leave=leavePbar)
+            pbar = tqdm(total=len(result._images), leave=leavePbar)
             pbar.set_description("Cleanup Images w/o Annotations")
-        for idx in list(range(len(result.images)))[::-1]:
-            img = result.images[idx]
-            if result.annotations.get(image_id=img.id) is None:
-                del result.images[idx]
+        for idx in list(range(len(result._images)))[::-1]:
+            img = result._images[idx]
+            if result._annotations.get(image_id=img.id) is None:
+                del result._images[idx]
             if showPbar:
                 pbar.update()
         if showPbar:
@@ -182,12 +182,12 @@ def filter(
     if imgFilter is not None or annFilter is not None or catFilter is not None and cleanupLic:
         # Images affect Licenses -> Licenses Done
         if showPbar:
-            pbar = tqdm(total=len(result.licenses), leave=leavePbar)
+            pbar = tqdm(total=len(result._licenses), leave=leavePbar)
             pbar.set_description("Cleanup Licenses w/o Images")
-        for idx in list(range(len(result.licenses)))[::-1]:
-            lic = result.licenses[idx]
-            if result.images.get(license=lic.id) is None:
-                del result.licenses[idx]
+        for idx in list(range(len(result._licenses)))[::-1]:
+            lic = result._licenses[idx]
+            if result._images.get(license=lic.id) is None:
+                del result._licenses[idx]
             if showPbar:
                 pbar.update()
         if showPbar:
@@ -195,12 +195,12 @@ def filter(
     if imgFilter is not None or licFilter is not None and cleanupAnn:
         # Images affect Annotations -> Annotations Done
         if showPbar:
-            pbar = tqdm(total=len(result.annotations), leave=leavePbar)
+            pbar = tqdm(total=len(result._annotations), leave=leavePbar)
             pbar.set_description("Cleanup Annotations w/o Images")
-        for idx in list(range(len(result.annotations)))[::-1]:
-            ann = result.annotations[idx]
-            if result.images.get(id=ann.image_id) is None:
-                del result.annotations[idx]
+        for idx in list(range(len(result._annotations)))[::-1]:
+            ann = result._annotations[idx]
+            if result._images.get(id=ann.image_id) is None:
+                del result._annotations[idx]
             if showPbar:
                 pbar.update()
         if showPbar:
@@ -208,12 +208,12 @@ def filter(
     if annFilter is not None or imgFilter is not None or licFilter is not None and cleanupCat:
         # Annotations affect Categories -> Categories Done
         if showPbar:
-            pbar = tqdm(total=len(result.categories), leave=leavePbar)
+            pbar = tqdm(total=len(result._categories), leave=leavePbar)
             pbar.set_description("Cleanup Categories w/o Annotations")
-        for idx in list(range(len(result.categories)))[::-1]:
-            cat = result.categories[idx]
-            if result.annotations.get(category_id=cat.id) is None:
-                del result.categories[idx]
+        for idx in list(range(len(result._categories)))[::-1]:
+            cat = result._categories[idx]
+            if result._annotations.get(category_id=cat.id) is None:
+                del result._categories[idx]
             if showPbar:
                 pbar.update()
         if showPbar:
@@ -225,31 +225,31 @@ def filter(
     return result
 
 def reindex(
-    self: Dataset, applyToSelf: bool=True,
+    self: DS, applyToSelf: bool=True,
     showPbar: bool=False, leavePbar: bool=False
-) -> Dataset:
+) -> DS:
     if not applyToSelf:
         result = copy.deepcopy(self)
     else:
         result = self
     
     def updateLicenseIdInImages(oldId: int, newId: int):
-        for img in result.images.search(lambda img: img.license == oldId):
+        for img in result._images.search(lambda img: img.license == oldId):
             img.license = newId
 
     def updateImgIdInAnnotations(oldId: int, newId: int):
-        for ann in result.annotations.search(lambda ann: ann.image_id == oldId):
+        for ann in result._annotations.search(lambda ann: ann.image_id == oldId):
             ann.image_id = newId
     
     def updateCatIdInAnnotations(oldId: int, newId: int):
-        for ann in result.annotations.search(lambda ann: ann.category_id == oldId):
+        for ann in result._annotations.search(lambda ann: ann.category_id == oldId):
             ann.category_id = newId
 
     for handler, idUpdateCallback in [
-        (result.licenses, updateLicenseIdInImages),
-        (result.images, updateImgIdInAnnotations),
-        (result.categories, updateCatIdInAnnotations),
-        (result.annotations, None)
+        (result._licenses, updateLicenseIdInImages),
+        (result._images, updateImgIdInAnnotations),
+        (result._categories, updateCatIdInAnnotations),
+        (result._annotations, None)
     ]:
         handler: CocoBaseHandler = handler
         handler.reindex(
