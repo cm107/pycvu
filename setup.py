@@ -56,8 +56,7 @@ setupSpec = SetupSpec(
     ]
 )
 setupSpec.extras['pdf'] = [
-    'PyMuPDF==1.19.6',
-    'cairosvg==2.5.2'
+    'PyMuPDF==1.19.6'
 ]
 setupSpec.extras['detectron2'] = [
     # TODO
