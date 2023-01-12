@@ -1,6 +1,7 @@
 from __future__ import annotations
 from . import object_detection as parent
 from ._format import CocoBase, CocoBaseHandler, Info, Image, Images, License, Licenses
+from .dataset_base import DatasetBase
 
 __all__ = [
     'Info', 'Image', 'License', 'Licenses',
@@ -54,7 +55,7 @@ class Categories(CocoBaseHandler[Category]):
     def from_dict(cls, item_dict: list[dict]) -> Categories:
         return Categories([Category.from_dict(val) for val in item_dict])
 
-class Dataset(CocoBase):
+class Dataset(DatasetBase):
     def __init__(
         self, info: Info=None, images: Images=None, licenses: Licenses=None,
         annotations: Annotations=None,
