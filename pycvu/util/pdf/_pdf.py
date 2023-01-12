@@ -94,3 +94,5 @@ def pdf_to_png(
         _func(path)
     else:
         raise FileNotFoundError(f"Failed to file file/directory: {path}")
+
+
