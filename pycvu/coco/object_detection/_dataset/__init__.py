@@ -30,4 +30,4 @@ class Dataset(DatasetBase):
 
     from ._labelme import to_labelme, from_labelme
     from ._eval import FrameEvalMeta, get_frame_eval_meta
-    from ._preview import PreviewSettings, show_preview
+    from ._preview import PreviewSettings, draw_preview, get_preview, show_preview, save_preview

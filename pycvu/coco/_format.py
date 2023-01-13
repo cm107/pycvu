@@ -143,11 +143,25 @@ class Licenses(CocoBaseHandler[License]):
 
 class AnnotationBase(CocoBase):
     def __init__(
-        self, id: int, image_id: int, category_id: int
+        self, id: int, image_id: int, category_id: int,
+        score: float=None
     ):
         self.id = id
         self.image_id = image_id
         self.category_id = category_id
+        self.score = score
+    
+    def to_dict(self) -> dict:
+        item_dict = super().to_dict()
+        if 'score' in item_dict and item_dict['score'] is None:
+            del item_dict['score']
+        return item_dict
+
+    @classmethod
+    def from_dict(cls, item_dict: dict):
+        if 'score' not in item_dict:
+            item_dict['score'] = None
+        return super().from_dict(item_dict)
 
 ANN = TypeVar('ANN', bound=AnnotationBase)
 

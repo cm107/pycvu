@@ -93,6 +93,7 @@ def filter(
     annFilter: Callable[[ANN], bool]=None,
     imgFilter: Callable[[Image], bool]=None,
     licFilter: Callable[[License], bool]=None,
+    cleanup: bool | None=None,
     cleanupCat: bool=True, cleanupAnn: bool=True, cleanupImg: bool=True, cleanupLic: bool=True,
     reindex: bool=False,
     showPbar: bool=False, leavePbar: bool=False,
@@ -102,6 +103,11 @@ def filter(
     # Note: Each filter affects all handlers either directly or through broken references.
     # Example: catFilter affects categories directly, and affects annotations, images, and
     #          licenses through broken references.
+    if cleanup is not None:
+        cleanupCat = cleanup
+        cleanupAnn = cleanup
+        cleanupImg = cleanup
+        cleanupLic = cleanup
     if catFilter is None and annFilter is None and imgFilter is None and licFilter is None:
         raise ValueError("Must specify at least one filter callback.")
     
@@ -166,7 +172,7 @@ def filter(
                 pbar.update()
         if showPbar:
             pbar.close()
-    if annFilter is not None or catFilter is not None and cleanupImg:
+    if (annFilter is not None or catFilter is not None) and cleanupImg:
         # Annotations affect Images -> Images Done
         if showPbar:
             pbar = tqdm(total=len(result._images), leave=leavePbar)
@@ -179,7 +185,7 @@ def filter(
                 pbar.update()
         if showPbar:
             pbar.close()
-    if imgFilter is not None or annFilter is not None or catFilter is not None and cleanupLic:
+    if (imgFilter is not None or annFilter is not None or catFilter is not None) and cleanupLic:
         # Images affect Licenses -> Licenses Done
         if showPbar:
             pbar = tqdm(total=len(result._licenses), leave=leavePbar)
@@ -192,7 +198,7 @@ def filter(
                 pbar.update()
         if showPbar:
             pbar.close()
-    if imgFilter is not None or licFilter is not None and cleanupAnn:
+    if (imgFilter is not None or licFilter is not None) and cleanupAnn:
         # Images affect Annotations -> Annotations Done
         if showPbar:
             pbar = tqdm(total=len(result._annotations), leave=leavePbar)
@@ -205,7 +211,7 @@ def filter(
                 pbar.update()
         if showPbar:
             pbar.close()
-    if annFilter is not None or imgFilter is not None or licFilter is not None and cleanupCat:
+    if (annFilter is not None or imgFilter is not None or licFilter is not None) and cleanupCat:
         # Annotations affect Categories -> Categories Done
         if showPbar:
             pbar = tqdm(total=len(result._categories), leave=leavePbar)

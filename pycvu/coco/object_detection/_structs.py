@@ -6,11 +6,14 @@ from .._format import CocoBase, CocoBaseHandler, \
 
 class Annotation(AnnotationBase):
     def __init__(
-        self, id: int, image_id: int, category_id: int, segmentation: list[list[int]],
-        area: float, bbox: tuple[int, int, int, int], iscrowd: int
+        self, id: int, image_id: int, category_id: int,
+        segmentation: list[list[int]],
+        area: float, bbox: tuple[int, int, int, int], iscrowd: int,
+        score: float=None
     ):
         super().__init__(
-            id=id, image_id=image_id, category_id=category_id
+            id=id, image_id=image_id, category_id=category_id,
+            score=score
         )
         self.segmentation = segmentation
         self.area = area
