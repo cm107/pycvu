@@ -1,1 +1,1 @@
-from ._pdf_structs import *
+from .pdf_structs import *
