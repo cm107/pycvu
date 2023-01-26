@@ -59,8 +59,8 @@ class Drawings:
         @classmethod
         def from_dict(cls, item_dict: dict) -> Drawings.Line:
             return Drawings.Line(
-                p0=Vector2(*item_dict['p0']),
-                p1=Vector2(*item_dict['p1'])
+                p0=Vector2(*item_dict['p0']) if item_dict['p0'] is not None else None,
+                p1=Vector2(*item_dict['p1']) if item_dict['p1'] is not None else None
             )
         
         def reverse_points(self) -> Drawings.Line:

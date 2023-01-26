@@ -304,6 +304,33 @@ class PDFPage:
     def get_text(self, textType: str='text') -> list[str]:
         return self._page.get_text(textType).split('\n')
 
+    def get_text_blocks(self, rotate: bool=True, scale: bool=True) -> tuple[list[BBox2D], list[str]]:
+        data: list[float, float, float, float, str, int, int] = \
+            self._page.get_text('blocks')
+        # x0, y0, x1, y1, rawText, idx, _ = data[0]
+        bboxList: list[BBox2D] = []
+        rawTextList: list[str] = []
+        xscale, yscale = self._dpiScaleFactor
+        for x0, y0, x1, y1, rawText, idx, _ in data:
+            rect = Rect(x0, y0, x1, y1)
+            rawTextList.append(rawText)
+
+            if rotate:
+                rect = rect * self._page.rotation_matrix
+            if scale:
+                bbox = BBox2D(
+                    Vector2(rect.x0 * xscale, rect.y0 * yscale),
+                    Vector2(rect.x1 * xscale, rect.y1 * yscale)
+                )
+            else:
+                bbox = BBox2D(
+                    Vector2(rect.x0, rect.y0),
+                    Vector2(rect.x1, rect.y1)
+                )
+            bboxList.append(bbox)
+
+        return bboxList, rawTextList
+
     def get_drawings(self, rotate: bool=True, scale: bool=True) -> Drawings:
         """Note
         drawing['type']
