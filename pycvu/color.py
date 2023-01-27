@@ -101,6 +101,26 @@ class Color(Base):
     def white(cls) -> Color:
         return cls(255, 255, 255)
 
+    @classmethod
+    @property
+    def yellow(cls) -> Color:
+        return cls(255, 255, 0)
+
+    @classmethod
+    @property
+    def magenta(cls) -> Color:
+        return cls(255, 0, 255)
+    
+    @classmethod
+    @property
+    def cyan(cls) -> Color:
+        return cls(0, 255, 255)
+
+    @classmethod
+    @property
+    def orange(cls) -> Color:
+        return cls(255, 165, 0)
+
     def sample_img(self, shape: tuple) -> npt.NDArray[np.uint8]:
         img = np.zeros(shape, dtype=np.uint8)
         img[:,:] = self.bgr
