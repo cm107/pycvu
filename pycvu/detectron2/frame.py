@@ -8,7 +8,9 @@ import numpy.typing as npt
 import cv2
 from pyevu import BBox2D, Vector2
 
-from ..util._cv import CvUtil
+from ..util import CvUtil, ColorVar
+from ..base import Base, BaseHandler
+from ..color import Color
 
 class FrameData:
     def __init__(
@@ -88,3 +90,129 @@ class FrameData:
                 return self._data.gt_classes.tolist()
             else:
                 return None
+
+class FrameInstance(Base):
+    class Draw:
+        color: ColorVar = Color.red
+        thickness: int = 1
+        lineType: int = cv2.LINE_AA
+
+    def __init__(
+        self,
+        pred_box: BBox2D,
+        pred_class: int,
+        score: float
+    ):
+        self.pred_box = pred_box
+        self.pred_class = pred_class
+        self.score = score
+
+    def to_dict(self) -> dict:
+        return {
+            'pred_box': self.pred_box.to_dict(),
+            'pred_class': self.pred_class,
+            'score': self.score
+        }
+
+    @classmethod
+    def from_dict(cls, item_dict: dict) -> FrameInstance:
+        return FrameInstance(
+            pred_box=BBox2D.from_dict(item_dict['pred_box']),
+            pred_class=item_dict['pred_class'],
+            score=item_dict['score']
+        )
+    
+    def _draw(self, img: np.ndarray):
+        img = CvUtil.rectangle(
+            img=img,
+            pt1=self.pred_box.v0, pt2=self.pred_box.v1,
+            color=FrameInstance.Draw.color,
+            thickness=FrameInstance.Draw.thickness,
+            lineType=FrameInstance.Draw.lineType
+        )
+        img = CvUtil.bbox_text(
+            img, text=str(round(self.score, 2)),
+            bbox=self.pred_box, color=FrameInstance.Draw.color
+        )
+    
+    def draw(self, img: np.ndarray) -> np.ndarray:
+        result = img.copy()
+        self._draw(result)
+        return result
+
+class FrameInstances(BaseHandler[FrameInstance]):
+    def __init__(
+        self,
+        _objects: list[FrameInstance]=None,
+        _image_size: tuple[int, int]=None
+    ):
+        super().__init__(_objects)
+        self._image_size = _image_size
+    
+    def to_dict(self) -> dict:
+        return {
+            '_objects': [obj.to_dict() for obj in self],
+            '_image_size': list(self._image_size) if self._image_size is not None else None
+        }
+    
+    @classmethod
+    def from_dict(cls, item_dict: dict) -> FrameInstances:
+        return FrameInstances(
+            [FrameInstance.from_dict(_dict) for _dict in item_dict['_objects']],
+            _image_size=tuple(item_dict['_image_size']) if item_dict['_image_size'] is not None else None
+        )
+
+    @classmethod
+    def from_dict(cls, item_dict: dict) -> FrameInstances:
+        raise NotImplementedError
+
+    @property
+    def image_height(self) -> int:
+        return self._image_size[0] if self._image_size is not None else None
+    
+    @property
+    def image_width(self) -> int:
+        return self._image_size[1] if self._image_size is not None else None
+
+    @property
+    def num_instances(self) -> int:
+        return self.__len__()
+
+    @classmethod
+    def from_raw_instances(cls, instances: Instances) -> FrameInstances:
+        fields: dict[str, Any] = instances._fields
+        # image_height, image_width = instances._image_size
+        pred_boxes: Boxes = fields['pred_boxes'] if 'pred_boxes' in fields else None
+        if pred_boxes is not None:
+            pred_boxes: list[BBox2D] = [
+                BBox2D(Vector2(*vals[:2]), Vector2(*vals[2:]))
+                for vals in pred_boxes.tensor.tolist()
+            ]
+        pred_classes: torch.Tensor = fields['pred_classes'] if 'pred_classes' in fields else None
+        pred_classes: list[int] = pred_classes.tolist()
+        scores: torch.Tensor = fields['scores'] if 'scores' in fields else None
+        scores: list[float] = [float(score) for score in scores.tolist()]
+
+        # num_instances = len(pred_boxes) # *
+        assert pred_boxes is not None
+        assert pred_classes is not None
+        assert scores is not None
+        return FrameInstances(
+            [
+                FrameInstance(pred_box, pred_class, score)
+                for pred_box, pred_class, score in zip(
+                    pred_boxes, pred_classes, scores
+                )
+            ],
+            _image_size=instances._image_size
+        )
+    
+    def _draw(self, img: np.ndarray):
+        for obj in self:
+            obj._draw(img)
+        return img
+    
+    def draw(self, img: np.ndarray) -> np.ndarray:
+        result = img.copy()
+        self._draw(result)
+        return result

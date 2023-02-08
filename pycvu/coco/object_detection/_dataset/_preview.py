@@ -152,9 +152,20 @@ def draw_preview(self: Dataset, img: np.ndarray, image_id: int, results: Results
                 )
     return img
 
-def get_preview(self: Dataset, imageIdx: int, results: Results=None) -> np.ndarray:
+def get_preview(
+    self: Dataset, imageIdx: int, results: Results=None,
+    imgDir: str=None
+) -> np.ndarray:
     image = self.images[imageIdx]
-    img = cv2.imread(image.file_name)
+    if imgDir is not None:
+        if not os.path.isdir(imgDir):
+            raise FileNotFoundError
+        path = f"{imgDir}/{image.file_name}"
+    else:
+        path = image.file_name
+    if not os.path.isfile(path):
+        raise FileNotFoundError
+    img = cv2.imread(path)
     assert img is not None
     img = self.draw_preview(
         img=img, image_id=image.id,
@@ -162,12 +173,15 @@ def get_preview(self: Dataset, imageIdx: int, results: Results=None) -> np.ndarr
     )
     return img
 
-def show_preview(self: Dataset, results: Results=None):
+def show_preview(
+    self: Dataset, results: Results=None,
+    imgDir: str=None
+):
     vis = SimpleVisualizer()
     with vis.loop(self.images) as loop:
         while not loop.done:
             image = self.images[loop.index]
-            img = self.get_preview(loop.index, results=results)
+            img = self.get_preview(loop.index, results=results, imgDir=imgDir)
             vis.show(img, title=f'image.id={image.id}, filename={os.path.basename(image.file_name)}')
 
 def save_preview(self: Dataset, saveDir: str, results: Results=None, showPbar: bool=False):

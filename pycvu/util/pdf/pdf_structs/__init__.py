@@ -173,7 +173,7 @@ class PDFPage:
     
     @property
     def width(self) -> int:
-        self._resolution[0]
+        return self._resolution[0]
     
     @width.setter
     def width(self, value: int):
