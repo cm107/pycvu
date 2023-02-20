@@ -108,3 +108,70 @@ class Results(BaseHandler[Result]):
                     )
                     annotations.append(ann)
         return annotations
+    
+    @staticmethod
+    def gtdt_match(anns: Annotations, results: Results) -> dict[int, int | None]:
+        """
+        Matches GT annotations to DT results by creating an index map.
+        When a GT annotations has no matching DT result, it will be mapped to None.
+        """
+        _results = results.copy()
+        _resultsIdxList = list(range(len(_results)))
+        _resultsScoreList = [_r.score for _r in _results]
+        _results = [_r for _, _r in sorted(zip(_resultsScoreList, _results), reverse=True)]
+        _resultsIdxList = [_r for _, _r in sorted(zip(_resultsScoreList, _resultsIdxList), reverse=True)]
+        _r2a: dict[int, int | None] = {}
+        for i, r in enumerate(_results):
+            ious: list[float] = []
+            for j, ann in enumerate(anns):
+                if ann.category_id == r.category_id and j not in _r2a.values():
+                    iou = BBox2D.IoU(ann.bbox2d, r.bbox2d)
+                else:
+                    iou = 0
+                ious.append(iou)
+            maxIou = max(ious)
+            maxIdx = ious.index(maxIou) if maxIou > 0 else None
+            _r2a[i] = maxIdx
+        a2r = {aIdx: _resultsIdxList[_rIdx] for _rIdx, aIdx in _r2a.items() if aIdx is not None}
+        for k in range(len(anns)):
+            if k not in a2r:
+                a2r[k] = None
+        assert None not in a2r.keys(), f"{a2r=}"
+        return a2r
+    
+    @staticmethod
+    def gtdt_match_info(anns: Annotations, results: Results, iouThresh: float=0.5) -> GtDtMatchInfo:
+        a2r = Results.gtdt_match(anns, results)
+        a2iou: dict[int, float] = {
+            annIdx: (
+                BBox2D.IoU(anns[annIdx].bbox2d, results[rIdx].bbox2d)
+                if rIdx is not None
+                else 0
+            )
+            for annIdx, rIdx in a2r.items()
+        }
+        tp: int = 0; fp: int = 0; fn: int = 0
+        for annIdx, iou in a2iou.items():
+            if iou >= iouThresh:
+                tp += 1
+            else:
+                fp += 1; fn += 1
+        for rIdx in range(len(results)):
+            if rIdx not in a2r.values():
+                fp += 1
+        return GtDtMatchInfo(a2r=a2r, a2iou=a2iou, tp=tp, fp=fp, fn=fn)
+
+class GtDtMatchInfo:
+    def __init__(
+        self,
+        a2r: dict[int, int | None],
+        a2iou: dict[int, float],
+        tp: int, fp: int, fn: int
+    ):
+        self.a2r = a2r
+        self.a2iou = a2iou
+        self.tp = tp; self.fp = fp; self.fn = fn
+    
+    @property
+    def tpfpfn(self) -> tuple[int, int, int]:
+        return (self.tp, self.fp, self.fn)

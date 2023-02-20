@@ -1,5 +1,7 @@
 from __future__ import annotations
 from typing import Callable
+import random
+import math
 from datetime import datetime
 import copy
 from tqdm import tqdm
@@ -265,3 +267,60 @@ def reindex(
         )
     
     return result
+
+def split(
+    self: DS,
+    weights: list[1, 1, 1],
+    seed: None | int | float | str | bytes=None,
+    showPbar: bool=False, leavePbar: bool=False
+) -> list[DS]:
+    """
+    Splits the dataset up into parts.
+
+    Parameters:
+        seed:
+            Seed used for random number generator when randomly
+            splitting the dataset.
+            Note:
+                If left as None, the system time is used, meaning
+                the results won't be reproducible.
+        showPbar:
+            Show the progress bar.
+        leavePbar:
+            Leave the progress bar.
+    """
+    rand = random.Random(seed)
+    sampleProps: float = [weights[i]/(sum(weights) - sum(weights[:i])) for i in list(range(len(weights)))]
+    idxList: list[int] = list(range(self._images.__len__()))
+    samples: list[list[int]] = []
+    for sampleProp in sampleProps:
+        sampleSize = math.floor(sampleProp * len(idxList))
+        sampleIdxList = rand.sample(idxList, k=sampleSize)
+        idxList = list(set(idxList) - set(sampleIdxList))
+        samples.append(sampleIdxList)
+    assert sum([len(s) for s in samples]) == len(self._images)
+    
+    if showPbar:
+        pbar = tqdm(total=sum([len(s) for s in samples]), unit="image(s)", leave=leavePbar)
+        pbar.desc = "Splitting Datasets"
+
+    datasets: list[DS] = []
+    for sampleIdxList in samples:
+        dataset = type(self)()
+        dataset._info = self._info.copy()
+        dataset._info.date_created = datetime.now()
+        dataset._licenses = self._licenses.copy()
+        dataset._categories = self._categories.copy()
+        for idx in sampleIdxList:
+            image = self._images[idx].copy()
+            dataset._images.append(image)
+            anns = self._annotations.search(lambda ann: ann.image_id == image.id)
+            dataset._annotations._objects.extend(anns._objects.copy())
+            if showPbar:
+                pbar.update()
+        dataset._images.sort(lambda img: img.id)
+        dataset._annotations.sort(lambda ann: ann.id)
+        datasets.append(dataset)
+    if showPbar:
+        pbar.close()
+    return datasets
