@@ -8,7 +8,7 @@ import numpy.typing as npt
 import cv2
 from pyevu import BBox2D, Vector2
 
-from ..util import CvUtil, ColorVar
+from ..util import CvUtil, ColorVar, Convert, PilUtil
 from ..base import Base, BaseHandler
 from ..color import Color
 
@@ -122,22 +122,34 @@ class FrameInstance(Base):
             score=item_dict['score']
         )
     
-    def _draw(self, img: np.ndarray):
-        img = CvUtil.rectangle(
-            img=img,
-            pt1=self.pred_box.v0, pt2=self.pred_box.v1,
+    def _draw(self, img: np.ndarray) -> np.ndarray:
+        # img = CvUtil.rectangle(
+        #     img=img,
+        #     pt1=self.pred_box.v0, pt2=self.pred_box.v1,
+        #     color=FrameInstance.Draw.color,
+        #     thickness=FrameInstance.Draw.thickness,
+        #     lineType=FrameInstance.Draw.lineType
+        # )
+        # img = CvUtil.bbox_text(
+        #     img, text=str(round(self.score, 2)),
+        #     bbox=self.pred_box, color=FrameInstance.Draw.color
+        # )
+        img = Convert.cv_to_pil(img)
+        img = PilUtil.bbox_text(
+            img=img, text=str(round(self.score, 2)), bbox=self.pred_box,
+            fontPath=PilUtil.defaultFontPath,
             color=FrameInstance.Draw.color,
-            thickness=FrameInstance.Draw.thickness,
-            lineType=FrameInstance.Draw.lineType
+            side='right',
+            direction='rtl',
+            targetProp=0.25, targetDim='height',
+            drawBbox=True
         )
-        img = CvUtil.bbox_text(
-            img, text=str(round(self.score, 2)),
-            bbox=self.pred_box, color=FrameInstance.Draw.color
-        )
+        img = Convert.pil_to_cv(img)
+        return img
     
     def draw(self, img: np.ndarray) -> np.ndarray:
         result = img.copy()
-        self._draw(result)
+        result = self._draw(result)
         return result
 
 class FrameInstances(BaseHandler[FrameInstance]):
@@ -207,12 +219,12 @@ class FrameInstances(BaseHandler[FrameInstance]):
             _image_size=instances._image_size
         )
     
-    def _draw(self, img: np.ndarray):
+    def _draw(self, img: np.ndarray) -> np.ndarray:
         for obj in self:
-            obj._draw(img)
+            img = obj._draw(img)
         return img
     
     def draw(self, img: np.ndarray) -> np.ndarray:
         result = img.copy()
-        self._draw(result)
+        result = self._draw(result)
         return result

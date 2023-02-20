@@ -6,6 +6,8 @@ from PIL import Image as pilImage, \
     ImageFont as pilImageFont
 
 from pycvu.interval import Interval
+import pycvu
+from pyevu import BBox2D, Vector2
 
 from ..vector import Vector
 if TYPE_CHECKING:
@@ -20,6 +22,8 @@ from ._convert import Convert
 from ._mask import MaskUtil
 
 class PilUtil:
+    defaultFontPath = f"{pycvu.__path__[0]}/data/font/ipaexg.ttf"
+
     @staticmethod
     def _apply_rotate(
         img: pilImage.Image,
@@ -261,6 +265,164 @@ class PilUtil:
             
         return img
 
+    @staticmethod
+    def bbox_text(
+        img: pilImage.Image, text: StringVar, bbox: BBox2D,
+        fontPath: str,
+        color: ColorVar,
+        side: str='top',
+        direction: str='rtl',
+        targetProp: float=0.8, targetDim: str='width',
+        widthPropBounds: tuple(float, float)=None,
+        heightPropBounds: tuple(float, float)=None,
+        rotation: FloatVar=0,
+        fillMaskTextbox: bool=False,
+        drawBbox: bool=False,
+        drawTextBbox: bool=False,
+        bboxLineWidth: float=1,
+        refMask: Mask=None
+    ):
+        baseFontSize = 20
+
+        text = Convert.cast_str(text)
+        color = Convert.cast_color(color, tupleAttr='rgb', asInt=True)
+        bboxWidth = bbox.xInterval.length
+        bboxHeight = bbox.yInterval.length
+        if side in ['top', 't']:
+            anchor = 'mb'
+            p0 = Vector2(bbox.v1.x, bbox.v0.y)
+            p1 = bbox.v0
+            refPoint = 0.5 * (p0 + p1)
+            offsetDir = Vector2.down
+        elif side in ['bottom', 'b']:
+            anchor = 'mt'
+            p0 = Vector2(bbox.v0.x, bbox.v1.y)
+            p1 = bbox.v1
+            refPoint = 0.5 * (p0 + p1)
+            offsetDir = Vector2.up
+        elif side in ['left', 'l']:
+            anchor = 'rm'
+            p0 = Vector2(bbox.v0.x, bbox.v1.y)
+            p1 = bbox.v0
+            refPoint = 0.5 * (p0 + p1)
+            offsetDir = Vector2.left
+        elif side in ['right', 'r']:
+            anchor = 'lm'
+            p0 = Vector2(bbox.v1.x, bbox.v0.y)
+            p1 = bbox.v1
+            refPoint = 0.5 * (p0 + p1)
+            offsetDir = Vector2.right
+        else:
+            raise ValueError
+        
+        draw = pilImageDraw.Draw(img, mode=None)
+        font = pilImageFont.truetype(font=fontPath, size=baseFontSize)
+        w, h = draw.textsize(text, font=font, direction=direction)
+        wProp = w / bboxWidth; hProp = h / bboxHeight
+
+        def adjustScaleToWidthBounds(scale: float) -> float:
+            if widthPropBounds is not None:
+                minWidthProp, maxWidthProp = widthPropBounds
+                if scale * wProp > maxWidthProp:
+                    scale = maxWidthProp / wProp
+                if scale * wProp < minWidthProp:
+                    scale = minWidthProp / wProp
+            return scale
+
+        def adjustScaleToHeightBounds(scale: float) -> float:
+            if heightPropBounds is not None:
+                minHeightProp, maxHeightProp = heightPropBounds
+                if scale * hProp > maxHeightProp:
+                    scale = maxHeightProp / hProp
+                if scale * hProp < minHeightProp:
+                    scale = minHeightProp / hProp
+            return scale
+
+        if targetDim == 'width':
+            targetScale = targetProp / wProp
+            targetScale = adjustScaleToHeightBounds(targetScale)
+            targetScale = adjustScaleToWidthBounds(targetScale)
+        elif targetDim == 'height':
+            targetScale = targetProp / hProp
+            targetScale = adjustScaleToWidthBounds(targetScale)
+            targetScale = adjustScaleToHeightBounds(targetScale)
+        else:
+            raise ValueError
+
+        targetFontSize = targetScale * baseFontSize
+        targetFontSize = max(1, int(targetFontSize))
+        targetFont = pilImageFont.truetype(font=fontPath, size=targetFontSize)
+        targetW, targetH = draw.textsize(text, font=targetFont, direction=direction)
+        position = refPoint + abs(Vector2.Dot(Vector2(targetW/2, targetH/2), offsetDir)) * offsetDir
+        textPosition = refPoint
+        position = tuple(position)
+        textPosition = tuple(textPosition)
+
+        def textDrawCallback(d: pilImageDraw.ImageDraw, fill: tuple, fillTextbox: bool=False):
+            if not fillTextbox:
+                d.text(
+                    xy=textPosition, text=text, fill=fill,
+                    font=targetFont, direction=direction,
+                    anchor=anchor
+                )
+                if drawTextBbox:
+                    p0 = (position[0] - targetW/2, position[1] - targetH/2)
+                    p1 = (position[0] + targetW/2, position[1] + targetH/2)
+                    shape: list[float] = list(p0) + list(p1)
+                    d.rectangle(xy=shape, outline=fill, width=bboxLineWidth)
+            else:
+                p0 = (position[0] - targetW/2, position[1] - targetH/2)
+                p1 = (position[0] + targetW/2, position[1] + targetH/2)
+                shape: list[float] = list(p0) + list(p1)
+                d.rectangle(xy=shape, fill=fill)
+
+        def bboxDrawCallback(d: pilImageDraw.ImageDraw, outline: tuple):
+            p0 = tuple(bbox.v0)
+            p1 = tuple(bbox.v1)
+            shape: list[float] = list(p0) + list(p1)
+            d.rectangle(xy=shape, outline=outline, width=bboxLineWidth)
+
+        if rotation != 0:
+            img = PilUtil._apply_rotate(
+                img, rotation,
+                partial(textDrawCallback, fill=color),
+                center=position
+            )
+            if drawBbox:
+                img = PilUtil._apply_rotate(
+                    img, rotation,
+                    partial(bboxDrawCallback, outline=color)
+                )
+        else:
+            textDrawCallback(draw, fill=color)
+            if drawBbox:
+                bboxDrawCallback(draw, outline=color)
+
+        if refMask is not None:
+            textMask = pilImage.new("RGB", (img.width, img.height), color=(0, 0, 0))
+            textMaskColor = (255, 255, 255)
+            if rotation != 0:
+                textMask = PilUtil._apply_rotate(
+                    textMask, rotation,
+                    partial(textDrawCallback, fill=textMaskColor, fillTextbox=fillMaskTextbox),
+                    center=position
+                )
+                if drawBbox:
+                    img = PilUtil._apply_rotate(
+                        textMask, rotation,
+                        partial(bboxDrawCallback, outline=textMaskColor)
+                    )
+            else:
+                textDrawCallback(pilImageDraw.Draw(textMask, mode=None), fill=textMaskColor, fillTextbox=fillMaskTextbox)
+                if drawBbox:
+                    bboxDrawCallback(pilImageDraw.Draw(textMask, mode=None), outline=textMaskColor)
+            textMask = Convert.pil_to_cv(textMask)
+            textMask = MaskUtil.eq_color(textMask, color=textMaskColor)
+            assert refMask._mask is not None
+            refMask._mask |= textMask
+            
+        return img
+
     class Callback:
         @staticmethod
         def get_position_interval(img: pilImage.Image) -> Interval[Vector[float]]:
@@ -273,11 +435,8 @@ class PilUtil:
     @staticmethod
     def debug():
         img = pilImage.new("RGB", (500, 500))
-        
-        import pycvu
-        fontPath = f"{pycvu.__path__[0]}/data/font/ipaexg.ttf"
         PilUtil.hanko(
-            img, text="夏生", fontPath=fontPath, fontSize=150, color=(255, 0, 0),
+            img, text="夏生", fontPath=PilUtil.defaultFontPath, fontSize=150, color=(255, 0, 0),
             position=(250, 250), direction='ttb', outlineWidthRatio=20,
             marginOffset=0, marginRatio=0.1
         )
@@ -286,11 +445,8 @@ class PilUtil:
     @staticmethod
     def debug_text():
         img = pilImage.new("RGB", (500, 500), color=(0, 0, 255))
-        
-        import pycvu
-        fontPath = f"{pycvu.__path__[0]}/data/font/ipaexg.ttf"
         img = PilUtil.text(
-            img=img, text='hello', fontPath=fontPath, fontSize=150,
+            img=img, text='hello', fontPath=PilUtil.defaultFontPath, fontSize=150,
             color=(255, 0, 0), position=(250, 250), rotation=45
         )
         img.show()
@@ -302,5 +458,26 @@ class PilUtil:
             img=img, center=(300, 350), axis=(100, 50),
             fillColor=(0,255,0), outlineColor=(255,0,0),
             outlineWidth=10, rotation=45
+        )
+        img.show()
+
+    @staticmethod
+    def debug_bbox_text():
+        img = pilImage.new("RGB", (500, 500), color=(0, 0, 255))
+
+        img = PilUtil.bbox_text(
+            img=img, text='物凄く長い文字列',
+            bbox=BBox2D(Vector2(200,200), Vector2(300,300)),
+            fontPath=PilUtil.defaultFontPath,
+            color=(0,255,0),
+            # side='top', direction='rtl', targetProp=0.8, targetDim='width',
+            side='left', direction='ttb', targetProp=0.8, targetDim='height',
+
+            rotation=0,
+            fillMaskTextbox=False,
+            drawBbox=True,
+            drawTextBbox=True,
+            bboxLineWidth=1,
+            refMask=None
         )
         img.show()
