@@ -100,7 +100,8 @@ setup(
         'PyYAML>=6.0',
         'joblib',
         'tqdm>=4.64.1',
-        'pyevu @ git+ssh://git@github.com/cm107/pyevu.git@master',
+        # 'pyevu @ git+ssh://git@github.com/cm107/pyevu.git@master',
+        'pyevu @ https://github.com/cm107/pyevu/archive/master.zip',
         'PyMuPDF>=1.19.6'
     ],
     python_requires='>=3.10',
