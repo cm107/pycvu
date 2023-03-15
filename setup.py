@@ -93,7 +93,7 @@ setup(
         "Operating System :: OS Independent",
     ],
     install_requires=[
-        'pylint>=2.15.5',
+        'pylint',
         'numpy>=1.23.4',
         'opencv-python>=4.6.0.66',
         'Pillow>=9.2.0',
