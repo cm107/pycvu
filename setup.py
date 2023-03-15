@@ -94,7 +94,7 @@ setup(
     ],
     install_requires=[
         'pylint',
-        'numpy>=1.23.4',
+        'numpy',
         'opencv-python>=4.6.0.66',
         'Pillow>=9.2.0',
         'PyYAML>=6.0',
