@@ -96,7 +96,7 @@ setup(
         'pylint',
         'numpy',
         'opencv-python>=4.6.0.66',
-        'Pillow>=9.2.0',
+        'Pillow',
         'PyYAML>=6.0',
         'joblib>=1.2.0',
         'tqdm>=4.64.1',
