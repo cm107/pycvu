@@ -98,7 +98,7 @@ setup(
         'opencv-python>=4.6.0.66',
         'Pillow',
         'PyYAML>=6.0',
-        'joblib>=1.2.0',
+        'joblib',
         'tqdm>=4.64.1',
         'pyevu @ git+ssh://git@github.com/cm107/pyevu.git@master',
         'PyMuPDF>=1.19.6'
