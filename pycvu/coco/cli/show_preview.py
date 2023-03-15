@@ -1,3 +1,4 @@
+import sys
 import argparse
 from .. import ObjectDetection
 
@@ -11,9 +12,13 @@ def get_args() -> argparse.Namespace:
     parser.add_argument("--showAll", action='store_true', help="Show bbox, segmentation, and label.", default=False)
     return parser.parse_args()
 
-args = get_args()
-dataset = ObjectDetection.Dataset.load(args.path)
-ObjectDetection.Dataset.PreviewSettings.showBBox = args.showBBox or args.showAll
-ObjectDetection.Dataset.PreviewSettings.showSeg = args.showSeg or args.showAll
-ObjectDetection.Dataset.PreviewSettings.showLabel = args.showLabel or args.showAll
-dataset.show_preview(imgDir=args.imgDir)
+def main():
+    args = get_args()
+    dataset = ObjectDetection.Dataset.load(args.path)
+    ObjectDetection.Dataset.PreviewSettings.showBBox = args.showBBox or args.showAll
+    ObjectDetection.Dataset.PreviewSettings.showSeg = args.showSeg or args.showAll
+    ObjectDetection.Dataset.PreviewSettings.showLabel = args.showLabel or args.showAll
+    dataset.show_preview(imgDir=args.imgDir)
+
+if __name__ == '__main__':
+    sys.exit(main())

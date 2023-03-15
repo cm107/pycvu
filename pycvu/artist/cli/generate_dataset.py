@@ -1,3 +1,4 @@
+import sys
 import argparse
 import os
 import cv2
@@ -78,23 +79,27 @@ def get_args() -> argparse.Namespace:
 
     return parser.parse_args()
 
-args = get_args()
+def main():
+    args = get_args()
 
-artist = Artist.load(args.config)
-if args.bg is not None:
-    bg = cv2.imread(args.bg)
-    if args.reshape_bg:
-        bg = cv2.resize(
-            bg, dsize=(args.width, args.height),
-            interpolation=cv2.INTER_LINEAR
-        )
-else:
-    bg = (np.ones((args.height, args.width, 3)) * 255).astype(np.uint8)
-artist.src = bg
+    artist = Artist.load(args.config)
+    if args.bg is not None:
+        bg = cv2.imread(args.bg)
+        if args.reshape_bg:
+            bg = cv2.resize(
+                bg, dsize=(args.width, args.height),
+                interpolation=cv2.INTER_LINEAR
+            )
+    else:
+        bg = (np.ones((args.height, args.width, 3)) * 255).astype(np.uint8)
+    artist.src = bg
 
-artist.generate_dataset(
-    frames=args.frames, repeat=args.repeat,
-    combineResults=args.combineResults,
-    dumpDir=args.dumpDir,
-    showPbar=args.showPbar,
-)
+    artist.generate_dataset(
+        frames=args.frames, repeat=args.repeat,
+        combineResults=args.combineResults,
+        dumpDir=args.dumpDir,
+        showPbar=args.showPbar,
+    )
+
+if __name__ == '__main__':
+    sys.exit(main())

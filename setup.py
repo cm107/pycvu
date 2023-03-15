@@ -106,8 +106,8 @@ setup(
     python_requires='>=3.10',
     entry_points={
         'console_scripts': [
-            "pycvu-coco-show_preview=pycvu.coco.cli.show_preview",
-            "pycvu-artist-generate_dataset=pycvu.artist.cli.generate_dataset",
+            "pycvu-coco-show_preview=pycvu.coco.cli.show_preview:main",
+            "pycvu-artist-generate_dataset=pycvu.artist.cli.generate_dataset:main",
         ]
     }
 )
