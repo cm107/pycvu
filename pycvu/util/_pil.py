@@ -11,7 +11,7 @@ from pyevu import BBox2D, Vector2
 
 from ..vector import Vector
 if TYPE_CHECKING:
-    from ..mask import Mask
+    from ..mask import Mask, MaskHandler
 
 __all__ = [
     "PilUtil"
@@ -52,54 +52,188 @@ class PilUtil:
         align: Literal['left', 'center', 'right']='left',
         direction: Literal['rtl', 'ltr', 'ttb']='ltr',
         rotation: FloatVar=0,
+        ensureNoOverlap: bool=False,
+        ensureInBounds: bool=False,
         fillMaskTextbox: bool=False,
-        refMask: Mask=None
+        refMask: Mask=None,
+        maskHandler: MaskHandler=None
     ) -> pilImage.Image:
-        text = Convert.cast_str(text)
-        fontSize = Convert.cast_builtin(fontSize, asInt=True)
-        color = Convert.cast_color(color, tupleAttr='rgb', asInt=True)
-        if callable(position):
-            position = position(img)
-        position = Convert.cast_vector(position)
-        rotation = Convert.cast_builtin(rotation)
+        while True:
+            _text = Convert.cast_str(text)
+            _fontSize = Convert.cast_builtin(fontSize, asInt=True)
+            _color = Convert.cast_color(color, tupleAttr='rgb', asInt=True)
+            if callable(position):
+                _position = position(img)
+            else:
+                _position = position
+            _position = Convert.cast_vector(_position)
+            _rotation = Convert.cast_builtin(rotation)
 
-        draw = pilImageDraw.Draw(img, mode=None)
-        font = pilImageFont.truetype(font=fontPath, size=fontSize)
-        w, h = draw.textsize(text, font=font, direction=direction)
-        xy = (position[0] - w/2, position[1] - h/2)
+            draw = pilImageDraw.Draw(img, mode=None)
+            font = pilImageFont.truetype(font=fontPath, size=_fontSize)
+            w, h = draw.textsize(_text, font=font, direction=direction)
+            xy = (_position[0] - w/2, _position[1] - h/2)
 
-        def drawCallback(d: pilImageDraw.ImageDraw, c: tuple[int, int, int], fillTextbox: bool=False):
-            if not fillTextbox:
+            if ensureInBounds:
+                if _position[0] - w/2 < 0:
+                    continue
+                if _position[1] - h/2 < 0:
+                    continue
+                if _position[0] + w/2 > img.width:
+                    continue
+                if _position[1] + h/2 > img.height:
+                    continue
+
+            def drawCallback(d: pilImageDraw.ImageDraw, c: tuple[int, int, int], fillTextbox: bool=False):
+                if not fillTextbox:
+                    d.text(
+                        xy=xy,
+                        text=_text,
+                        fill=c,
+                        font=font,
+                        align=align,
+                        direction=direction,
+                    )
+                else:
+                    p0 = (_position[0] - w/2, _position[1] - h/2)
+                    p1 = (_position[0] + w/2, _position[1] + h/2)
+                    shape: list[float] = list(p0) + list(p1)
+                    d.rectangle(xy=shape, fill=c)
+            
+            if refMask is not None:
+                mask = pilImage.new("RGB", (img.width, img.height), color=(0, 0, 0))
+                maskColor = (255, 255, 255)
+                if _rotation != 0:
+                    mask = PilUtil._apply_rotate(mask, _rotation, partial(drawCallback, c=maskColor, fillTextbox=fillMaskTextbox), center=_position)
+                else:
+                    drawCallback(pilImageDraw.Draw(mask, mode=None), maskColor, fillTextbox=fillMaskTextbox)
+                mask = Convert.pil_to_cv(mask)
+                mask = MaskUtil.eq_color(mask, color=maskColor)
+
+                if maskHandler is not None and ensureNoOverlap:
+                    import numpy as np
+                    redo = False
+                    for _mask in maskHandler:
+                        # print(f"{mask.sum()=}, {_mask._mask.sum()=}")
+                        mask_intersection = np.logical_and(mask, _mask._mask, dtype=np.bool_)
+                        if mask_intersection.sum() > 0:
+                            # print(f"{mask_intersection.sum()=}")
+                            redo = True
+                            break
+                    if redo:
+                        continue
+
+                refMask._mask = mask
+
+            if _rotation != 0:
+                img = PilUtil._apply_rotate(img, _rotation, partial(drawCallback, c=_color), center=_position)
+            else:
+                drawCallback(draw, _color)
+            return img
+
+    @staticmethod
+    def waku(
+        img: pilImage.Image, text: StringVar,
+        wakuWidth: IntVar, wakuHeight: IntVar,
+        fontPath: str,
+        fontSize: IntVar,
+        color: ColorVar,
+        position: VectorVar | PilImageVectorCallback,
+        align: Literal['left', 'center', 'right']='left',
+        direction: Literal['rtl', 'ltr', 'ttb']='ltr',
+        rotation: FloatVar=0,
+        ensureNoOverlap: bool=False,
+        ensureInBounds: bool=False,
+        fillMaskTextbox: bool=False,
+        refMask: Mask=None,
+        maskHandler: MaskHandler=None
+    ) -> pilImage.Image:
+        while True:
+            _text = Convert.cast_str(text)
+            _wakuWidth = Convert.cast_builtin(wakuWidth, asInt=True)
+            _wakuHeight = Convert.cast_builtin(wakuWidth, asInt=True)
+
+            _fontSize = Convert.cast_builtin(fontSize, asInt=True)
+            _color = Convert.cast_color(color, tupleAttr='rgb', asInt=True)
+            if callable(position):
+                _position = position(img)
+            else:
+                _position = position
+            _position = Convert.cast_vector(_position)
+            _rotation = Convert.cast_builtin(rotation)
+
+            draw = pilImageDraw.Draw(img, mode=None)
+
+            def wakuDrawCallback(d: pilImageDraw.ImageDraw, c: tuple[int, int, int], fillTextbox: bool=False):
+                p0 = (_position[0] - _wakuWidth/2, _position[1] - _wakuHeight/2)
+                p1 = (_position[0] + _wakuWidth/2, _position[1] + _wakuHeight/2)
+                shape: list[float] = list(p0) + list(p1)
+                d.rectangle(xy=shape, fill=c)
+
+            if ensureInBounds:
+                if _position[0] < 0:
+                    continue
+                if _position[1] < 0:
+                    continue
+                if _position[0] + _wakuWidth > img.width:
+                    continue
+                if _position[1] + _wakuHeight > img.height:
+                    continue
+
+            font = pilImageFont.truetype(font=fontPath, size=_fontSize)
+            w, h = draw.textsize(_text, font=font, direction=direction)
+            _textPosition = Interval[Vector[int]](
+                Vector[int](_position[0] + w/2, _position[1] + h/2),
+                Vector[int](_position[0] + _wakuWidth - w/2, _position[1] + _wakuHeight - h/2)
+            )
+            _textPosition = Convert.cast_vector(_textPosition)
+            xy = (_textPosition[0] - w/2, _textPosition[1] - h/2)
+
+            def textDrawCallback(d: pilImageDraw.ImageDraw, c: tuple[int, int, int]):
                 d.text(
                     xy=xy,
-                    text=text,
+                    text=_text,
                     fill=c,
                     font=font,
                     align=align,
-                    direction=direction
+                    direction=direction,
                 )
-            else:
-                p0 = (position[0] - w/2, position[1] - h/2)
-                p1 = (position[0] + w/2, position[1] + h/2)
-                shape: list[float] = list(p0) + list(p1)
-                d.rectangle(xy=shape, fill=c)
-        
-        if refMask is not None:
-            mask = pilImage.new("RGB", (img.width, img.height), color=(0, 0, 0))
-            maskColor = (255, 255, 255)
-            if rotation != 0:
-                mask = PilUtil._apply_rotate(mask, rotation, partial(drawCallback, c=maskColor, fillTextbox=fillMaskTextbox), center=position)
-            else:
-                drawCallback(pilImageDraw.Draw(mask, mode=None), maskColor, fillTextbox=fillMaskTextbox)
-            mask = Convert.pil_to_cv(mask)
-            mask = MaskUtil.eq_color(mask, color=maskColor)
-            refMask._mask = mask
+            
+            def drawCallback(d: pilImageDraw.ImageDraw, c: tuple[int, int, int], fillTextbox: bool=False):
+                wakuDrawCallback(d=d, c=c, fillTextbox=fillMaskTextbox)
+                if not fillMaskTextbox:
+                    textDrawCallback(d=d, c=c)
 
-        if rotation != 0:
-            img = PilUtil._apply_rotate(img, rotation, partial(drawCallback, c=color), center=position)
-        else:
-            drawCallback(draw, color)
-        return img
+            if refMask is not None:
+                mask = pilImage.new("RGB", (img.width, img.height), color=(0, 0, 0))
+                maskColor = (255, 255, 255)
+                if _rotation != 0:
+                    mask = PilUtil._apply_rotate(mask, _rotation, partial(drawCallback, c=maskColor, fillTextbox=fillMaskTextbox), center=_position)
+                else:
+                    drawCallback(pilImageDraw.Draw(mask, mode=None), maskColor, fillTextbox=fillMaskTextbox)
+                mask = Convert.pil_to_cv(mask)
+                mask = MaskUtil.eq_color(mask, color=maskColor)
+
+                if maskHandler is not None and ensureNoOverlap:
+                    import numpy as np
+                    redo = False
+                    for _mask in maskHandler:
+                        # print(f"{mask.sum()=}, {_mask._mask.sum()=}")
+                        mask_intersection = np.logical_and(mask, _mask._mask, dtype=np.bool_)
+                        if mask_intersection.sum() > 0:
+                            # print(f"{mask_intersection.sum()=}")
+                            redo = True
+                            break
+                    if redo:
+                        continue
+
+                refMask._mask = mask
+
+            if _rotation != 0:
+                img = PilUtil._apply_rotate(img, _rotation, partial(drawCallback, c=_color), center=_position)
+            else:
+                drawCallback(draw, _color)
+            return img
 
     @staticmethod
     def ellipse(
@@ -446,8 +580,8 @@ class PilUtil:
     def debug_text():
         img = pilImage.new("RGB", (500, 500), color=(0, 0, 255))
         img = PilUtil.text(
-            img=img, text='hello', fontPath=PilUtil.defaultFontPath, fontSize=150,
-            color=(255, 0, 0), position=(250, 250), rotation=45
+            img=img, _text='hello', fontPath=PilUtil.defaultFontPath, _fontSize=150,
+            _color=(255, 0, 0), _position=(250, 250), _rotation=45
         )
         img.show()
 

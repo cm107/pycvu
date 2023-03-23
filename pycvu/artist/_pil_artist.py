@@ -39,6 +39,8 @@ class PilArtist:
         position: VectorVar | PilImageVectorCallback,
         direction: Literal['rtl', 'ltr', 'ttb']='ltr',
         rotation: FloatVar=0,
+        ensureNoOverlap: bool=False,
+        ensureInBounds: bool=False,
         weight: float=1, repeat: int=1, prob: float=1.0
     ) -> Artist:
         """Draws text on the image.
@@ -56,12 +58,42 @@ class PilArtist:
             position=position,
             direction=direction,
             rotation=rotation,
+            ensureNoOverlap=ensureNoOverlap,
+            ensureInBounds=ensureInBounds,
             fillMaskTextbox=PilArtist.fillMaskTextbox
         )
         maskSetting = self._artist.maskSetting.copy() if not self._artist.maskSetting.skip else None
         self._artist._add_process(DrawProcess(p, maskSetting, weight=weight, repeat=repeat, prob=prob, imgType=ImageType.PIL))
         return self
     
+    def waku(
+        self, text: StringVar,
+        wakuWidth: IntVar, wakuHeight: IntVar,
+        position: VectorVar | PilImageVectorCallback,
+        direction: Literal['rtl', 'ltr', 'ttb']='ltr',
+        rotation: FloatVar=0,
+        ensureNoOverlap: bool=False,
+        ensureInBounds: bool=False,
+        weight: float=1, repeat: int=1, prob: float=1.0
+    ) -> Artist:
+        p = partial(
+            PilUtil.waku,
+            text=text,
+            wakuWidth=wakuWidth, wakuHeight=wakuHeight,
+            fontPath=PilArtist.fontPath,
+            fontSize=PilArtist.fontSize,
+            color=Convert.bgr_to_rgb(self._artist.color),
+            position=position,
+            direction=direction,
+            rotation=rotation,
+            ensureNoOverlap=ensureNoOverlap,
+            ensureInBounds=ensureInBounds,
+            fillMaskTextbox=PilArtist.fillMaskTextbox
+        )
+        maskSetting = self._artist.maskSetting.copy() if not self._artist.maskSetting.skip else None
+        self._artist._add_process(DrawProcess(p, maskSetting, weight=weight, repeat=repeat, prob=prob, imgType=ImageType.PIL))
+        return self
+
     def hanko(
         self, text: StringVar,
         position: VectorVar | PilImageVectorCallback,
