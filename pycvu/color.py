@@ -108,6 +108,21 @@ class Color(Base):
 
     @classmethod
     @property
+    def yellow3(cls) -> Color:
+        return cls(205, 205, 0)
+
+    @classmethod
+    @property
+    def yellow4(cls) -> Color:
+        return cls(139, 139, 0)
+
+    @classmethod
+    @property
+    def banana(cls) -> Color:
+        return cls(227, 207, 87)
+
+    @classmethod
+    @property
     def magenta(cls) -> Color:
         return cls(255, 0, 255)
     
@@ -120,6 +135,86 @@ class Color(Base):
     @property
     def orange(cls) -> Color:
         return cls(255, 165, 0)
+
+    @classmethod
+    @property
+    def brick(cls) -> Color:
+        return cls(156, 102, 31)
+
+    @classmethod
+    @property
+    def brown(cls) -> Color:
+        return cls(165, 42, 42)
+
+    @classmethod
+    @property
+    def chocolate(cls) -> Color:
+        return cls(210, 105, 30)
+    
+    @classmethod
+    @property
+    def cobalt(cls) -> Color:
+        return cls(61, 89, 171)
+
+    @classmethod
+    @property
+    def pink(cls) -> Color:
+        return cls(255, 105, 180)
+
+    @classmethod
+    @property
+    def deeppink(cls) -> Color:
+        return cls(255, 20, 147)
+
+    @classmethod
+    @property
+    def indigo(cls) -> Color:
+        return cls(75, 0, 130)
+
+    @classmethod
+    @property
+    def maroon(cls) -> Color:
+        return cls(128, 0, 0)
+
+    @classmethod
+    @property
+    def navy(cls) -> Color:
+        return cls(0, 0, 128)
+
+    @classmethod
+    @property
+    def olive(cls) -> Color:
+        return cls(128, 128, 0)
+
+    @classmethod
+    @property
+    def violet(cls) -> Color:
+        return cls(238, 130, 238)
+
+    @classmethod
+    @property
+    def darkviolet(cls) -> Color:
+        return cls(148, 0, 211)
+
+    @classmethod
+    @property
+    def emeraldgreen(cls) -> Color:
+        return cls(0, 201, 87)
+
+    @classmethod
+    @property
+    def gold(cls) -> Color:
+        return cls(255, 215, 0)
+
+    @classmethod
+    @property
+    def greenyellow(cls) -> Color:
+        return cls(173, 255, 47)
+
+    @classmethod
+    @property
+    def darkgray(cls) -> Color:
+        return cls(169, 169, 169)
 
     def sample_img(self, shape: tuple) -> npt.NDArray[np.uint8]:
         img = np.zeros(shape, dtype=np.uint8)
