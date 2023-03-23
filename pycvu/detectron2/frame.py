@@ -96,6 +96,9 @@ class FrameInstance(Base):
         color: ColorVar = Color.red
         thickness: int = 1
         lineType: int = cv2.LINE_AA
+        textSizeProp: float = 0.25
+        showScore: bool = True
+        showLabel: bool = False
 
     def __init__(
         self,
@@ -122,7 +125,7 @@ class FrameInstance(Base):
             score=item_dict['score']
         )
     
-    def _draw(self, img: np.ndarray) -> np.ndarray:
+    def _draw(self, img: np.ndarray, labels: list[str]=None) -> np.ndarray:
         # img = CvUtil.rectangle(
         #     img=img,
         #     pt1=self.pred_box.v0, pt2=self.pred_box.v1,
@@ -135,21 +138,32 @@ class FrameInstance(Base):
         #     bbox=self.pred_box, color=FrameInstance.Draw.color
         # )
         img = Convert.cv_to_pil(img)
+
+        textParts: list[str] = []
+        scoreText = str(round(self.score, 2))
+        if FrameInstance.Draw.showScore:
+            textParts.append(scoreText)
+        if labels is not None:
+            labelText = labels[self.pred_class]
+            if FrameInstance.Draw.showLabel:
+                textParts.append(labelText)
+
+        text = ' '.join(textParts)
         img = PilUtil.bbox_text(
-            img=img, text=str(round(self.score, 2)), bbox=self.pred_box,
+            img=img, text=text, bbox=self.pred_box,
             fontPath=PilUtil.defaultFontPath,
             color=FrameInstance.Draw.color,
             side='right',
             direction='rtl',
-            targetProp=0.25, targetDim='height',
+            targetProp=FrameInstance.Draw.textSizeProp, targetDim='height',
             drawBbox=True
         )
         img = Convert.pil_to_cv(img)
         return img
     
-    def draw(self, img: np.ndarray) -> np.ndarray:
+    def draw(self, img: np.ndarray, labels: list[str]=None) -> np.ndarray:
         result = img.copy()
-        result = self._draw(result)
+        result = self._draw(result, labels=labels)
         return result
 
 class FrameInstances(BaseHandler[FrameInstance]):
@@ -173,10 +187,6 @@ class FrameInstances(BaseHandler[FrameInstance]):
             [FrameInstance.from_dict(_dict) for _dict in item_dict['_objects']],
             _image_size=tuple(item_dict['_image_size']) if item_dict['_image_size'] is not None else None
         )
-
-    @classmethod
-    def from_dict(cls, item_dict: dict) -> FrameInstances:
-        raise NotImplementedError
 
     @property
     def image_height(self) -> int:
@@ -219,12 +229,12 @@ class FrameInstances(BaseHandler[FrameInstance]):
             _image_size=instances._image_size
         )
     
-    def _draw(self, img: np.ndarray) -> np.ndarray:
+    def _draw(self, img: np.ndarray, labels: list[str]=None) -> np.ndarray:
         for obj in self:
-            img = obj._draw(img)
+            img = obj._draw(img, labels=labels)
         return img
     
-    def draw(self, img: np.ndarray) -> np.ndarray:
+    def draw(self, img: np.ndarray, labels: list[str]=None) -> np.ndarray:
         result = img.copy()
-        result = self._draw(result)
+        result = self._draw(result, labels=labels)
         return result
