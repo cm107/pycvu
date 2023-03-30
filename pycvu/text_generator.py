@@ -1,5 +1,6 @@
+from __future__ import annotations
 import random
-from .base import Base
+from .base import Base, BaseHandler
 from .interval import Interval
 
 class TextGenerator(Base):
@@ -44,6 +45,31 @@ class TextSampler(Base):
         sampler = TextSampler(StringSets.namae)
         for i in range(10):
             print(f"{sampler.random()=}")
+
+ComposableText = str | TextGenerator | TextSampler
+
+class TextComposer(BaseHandler[ComposableText]):
+    def __init__(self, _objects: list[ComposableText]=None):
+        super().__init__(_objects)
+    
+    def random(self) -> str:
+        assert len(self) > 0
+        result = ''
+        for composableText in self:
+            if type(composableText) is str:
+                result += composableText
+            else:
+                result += composableText.random()
+        return result
+
+    def to_dict(self, **kwargs) -> dict:
+        super().to_dict(compressed=False, **kwargs)
+
+    def debug():
+        numGen = TextGenerator('0123456789', textLength=Interval[int](1, 13))
+        composer = TextComposer(['第', numGen, '号'])
+        for i in range(10):
+            print(composer.random())
 
 class CharacterSets:
     alpha = "1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ!#$%&()-=^~|@`[{;+:*]},<.>/?_"

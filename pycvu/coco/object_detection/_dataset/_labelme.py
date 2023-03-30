@@ -85,7 +85,8 @@ def to_labelme(
 def from_labelme(
     cls: type[Dataset], annDir: str,
     showPbar: bool=False, leavePbar: bool=False,
-    allowNoAnn: bool=False
+    allowNoAnn: bool=False,
+    checkImageExists: bool=True
 ) -> Dataset:
     assert os.path.isdir(annDir)
     paths = sorted(glob.glob(f"{annDir}/*.json"))
@@ -106,7 +107,8 @@ def from_labelme(
         imgPath = labelmeAnn.imagePath
         if not os.path.isabs(imgPath):
             imgPath = os.path.abspath(f"{annDir}/{imgPath}")
-        assert os.path.isfile(imgPath)
+        if checkImageExists:
+            assert os.path.isfile(imgPath)
         image = Image(
             id=len(dataset.images),
             width=int(labelmeAnn.imageWidth),
@@ -115,7 +117,7 @@ def from_labelme(
             license=0,
             date_captured=datetime.fromtimestamp(
                 time.mktime(time.gmtime(os.path.getctime(imgPath)))
-            )
+            ) if os.path.isfile(imgPath) else None
         )
         dataset.images.append(image)
         for shape in labelmeAnn.shapes:

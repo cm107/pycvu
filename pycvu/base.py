@@ -521,7 +521,15 @@ class BaseHandler(Generic[T]):
             if key == '_objects':
                 workingDictList: list[dict] = []
                 for val0 in val:
-                    workingDict = val0.to_dict(**kwargs)
+                    if hasattr(val0, 'to_dict'):
+                        workingDict = val0.to_dict(**kwargs)
+                    elif type(val0) in [int, float, str]:
+                        workingDict = {
+                            '_val': val0,
+                            '_typedict': BaseUtil.to_type_dict(val0)
+                        }
+                    else:
+                        raise Exception
                     assert '_typedict' in workingDict
                     # del workingDict['_typedict']
                     workingDictList.append(workingDict)
@@ -610,7 +618,13 @@ class BaseHandler(Generic[T]):
                     for val0 in val:
                         assert '_typedict' in val0
                         obj_type = BaseUtil.from_type_dict(val0['_typedict'])
-                        loaded_val.append(obj_type.from_dict(val0, **kwargs))
+                        if hasattr(obj_type, 'from_dict'):
+                            loaded_val.append(obj_type.from_dict(val0, **kwargs))
+                        elif '_val' in val0:
+                            assert type(val0['_val']) in [int, float, str]
+                            loaded_val.append(val0['_val'])
+                        else:
+                            raise Exception
                     constructor_dict[key] = loaded_val
             elif type(val) is dict and '_typedict' in val:
                 inner_cls = BaseUtil.from_type_dict(val['_typedict'])
