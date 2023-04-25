@@ -1,18 +1,16 @@
 from __future__ import annotations
-import os
 import cv2
 import numpy as np
-from tqdm import tqdm
 from pyevu import BBox2D, Vector2
 from ....polygon import Segmentation
 from ....util import CvUtil
-from ....vis.cv import SimpleVisualizer
 from .._result import BBoxResult, SegmentationResult, Result, Results
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from . import Dataset
-    from .. import Image
+
+from ...dataset_base._preview import *
 
 class PreviewSettings:
     showGT: bool = True
@@ -152,91 +150,3 @@ def draw_preview(self: Dataset, img: np.ndarray, image_id: int, results: Results
                     showLabel=s.showResultLabel, showScore=s.showResultScore
                 )
     return img
-
-def get_preview_from_image(
-    self: Dataset, image: Image, results: Results=None,
-    imgDir: str=None
-) -> np.ndarray:
-    if imgDir is not None:
-        if not os.path.isdir(imgDir):
-            raise FileNotFoundError
-        path = f"{imgDir}/{image.file_name}"
-    else:
-        path = image.file_name
-    if not os.path.isfile(path):
-        raise FileNotFoundError
-    img = cv2.imread(path)
-    assert img is not None
-    img = self.draw_preview(
-        img=img, image_id=image.id,
-        results=results
-    )
-    return img
-
-def get_preview_from_image_idx(
-    self: Dataset, imageIdx: int, results: Results=None,
-    imgDir: str=None
-) -> np.ndarray:
-    image = self.images[imageIdx]
-    return self.get_preview_from_image(
-        image=image, results=results, imgDir=imgDir
-    )
-
-def get_preview(
-    self: Dataset, image: Image | int, results: Results=None,
-    imgDir: str=None
-) -> np.ndarray:
-    if type(image) is int:
-        image = self.images[imageIdx]
-    return self.get_preview_from_image(
-        image=image, results=results, imgDir=imgDir
-    )
-
-def show_preview(
-    self: Dataset, results: Results=None,
-    imgDir: str=None
-):
-    vis = SimpleVisualizer()
-    with vis.loop(self.images) as loop:
-        while not loop.done:
-            image = self.images[loop.index]
-            img = self.get_preview_from_image_idx(loop.index, results=results, imgDir=imgDir)
-            vis.show(img, title=f'image.id={image.id}, filename={os.path.basename(image.file_name)}')
-
-def show_filename(
-    self: Dataset, filename: str,
-    results: Results=None, imgDir: str=None
-):
-    image = self.images.get(lambda img: os.path.basename(img.file_name) == filename)
-    if image is None:
-        raise FileNotFoundError(f"Failed to find image in dataset with a filename of {filename}")
-    img = self.get_preview_from_image(image, results=results, imgDir=imgDir)
-    vis = SimpleVisualizer()
-    vis.show(img, title=f"filename={os.path.basename(image.file_name)}")
-
-def save_preview(
-    self: Dataset, saveDir: str,
-    results: Results=None, imgDir: str=None, showPbar: bool=False
-):
-    os.makedirs(saveDir, exist_ok=True)
-    if showPbar:
-        pbar = tqdm(total=len(self.images), leave=False)
-    for i, image in enumerate(self.images):
-        img = self.get_preview_from_image_idx(i, results=results, imgDir=imgDir)
-        filename = os.path.basename(image.file_name)
-        savePath = f"{saveDir}/{filename}"
-        cv2.imwrite(savePath, img)
-        if showPbar:
-            pbar.update()
-    if showPbar:
-        pbar.close()
-
-def save_filename(
-    self: Dataset, filename: str, savePath: str,
-    results: Results=None, imgDir: str=None
-):
-    image = self.images.get(lambda img: os.path.basename(img.file_name) == filename)
-    if image is None:
-        raise FileNotFoundError(f"Failed to find image in dataset with a filename of {filename}")
-    img = self.get_preview_from_image(image, results=results, imgDir=imgDir)
-    cv2.imwrite(savePath, img)

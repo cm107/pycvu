@@ -1,7 +1,7 @@
 import numpy as np
 import cv2
 import numpy.typing as npt
-from pyevu import BBox2D, Vector2
+from pyevu import BBox2D, Vector2, Quad2
 from .base import Base, BaseHandler
 from .util import MaskUtil, CvUtil
 from .polygon import Segmentation
@@ -36,15 +36,40 @@ class MaskSetting(Base):
     def skip(self) -> bool:
         return not self.track and not self.canOcclude
 
-class Mask(Base): # TODO: Need an optional category label here for the sake of making datasets.
+class MaskTextMeta(Base):
+    def __init__(self, text: str=None, rotation: float=0, preRotationBbox: BBox2D=None):
+        self.text = text
+        self.rotation = rotation
+        self.preRotationBbox = preRotationBbox
+
+    @property
+    def rotatedQuad(self) -> Quad2:
+        if self.preRotationBbox is None:
+            return None
+        
+        center = self.preRotationBbox.center
+        quad = Quad2.from_bbox2d(self.preRotationBbox)
+        if self.rotation == 0:
+            return quad
+        
+        quad = Quad2(*[
+            (p - center).rotate(-self.rotation) + center
+            for p in [quad.p0, quad.p1, quad.p2, quad.p3]
+        ])
+        return quad
+
+class Mask(Base):
     def __init__(
         self, _mask: npt.NDArray[np.bool_]=None,
-        setting: MaskSetting=MaskSetting()
+        setting: MaskSetting=MaskSetting(),
+        textMeta: MaskTextMeta=None
     ):
         self._mask = _mask
         """_mask is set inside of drawing method."""
 
         self.setting = setting
+
+        self.textMeta = textMeta if textMeta is not None else MaskTextMeta()
 
     @property
     def track(self) -> bool:

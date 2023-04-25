@@ -295,6 +295,9 @@ class CvUtil:
                 mask = drawCallback(mask, color=maskColor)
             mask = MaskUtil.eq_color(mask, color=maskColor)
             refMask._mask = mask
+            refMask.textMeta.text = text
+            refMask.textMeta.rotation = rotation
+            refMask.textMeta.preRotationBbox = MaskUtil.bbox_from_mask(mask)
 
         # return cv2.putText(
         #     img, text, org, fontFace, fontScale, color, thickness, lineType, bottomLeftOrigin

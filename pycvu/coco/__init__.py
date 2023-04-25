@@ -25,3 +25,15 @@ class KeypointDetection:
     from .keypoint_detection import Category
     from .keypoint_detection import Categories
     from .keypoint_detection import Dataset
+
+class OCR:
+    from .ocr import Info
+    from .ocr import Image
+    from .ocr import Images
+    from .ocr import License
+    from .ocr import Licenses
+    from .ocr import Annotation
+    from .ocr import Annotations
+    from .ocr import Category
+    from .ocr import Categories
+    from .ocr import Dataset

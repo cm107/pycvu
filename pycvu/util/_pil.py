@@ -104,11 +104,16 @@ class PilUtil:
                 mask = pilImage.new("RGB", (img.width, img.height), color=(0, 0, 0))
                 maskColor = (255, 255, 255)
                 if _rotation != 0:
+                    nonrotatedMask = pilImage.new("RGB", (img.width, img.height), color=(0, 0, 0))
+                    drawCallback(pilImageDraw.Draw(nonrotatedMask, mode=None), maskColor, fillTextbox=fillMaskTextbox)
                     mask = PilUtil._apply_rotate(mask, _rotation, partial(drawCallback, c=maskColor, fillTextbox=fillMaskTextbox), center=_position)
                 else:
                     drawCallback(pilImageDraw.Draw(mask, mode=None), maskColor, fillTextbox=fillMaskTextbox)
                 mask = Convert.pil_to_cv(mask)
                 mask = MaskUtil.eq_color(mask, color=maskColor)
+                if _rotation != 0:
+                    nonrotatedMask = Convert.pil_to_cv(nonrotatedMask)
+                    nonrotatedMask = MaskUtil.eq_color(nonrotatedMask, color=maskColor)
 
                 if maskHandler is not None and ensureNoOverlap:
                     import numpy as np
@@ -124,12 +129,54 @@ class PilUtil:
                         continue
 
                 refMask._mask = mask
+                refMask.textMeta.text = _text
+                refMask.textMeta.rotation = _rotation
+                if _rotation != 0:
+                    refMask.textMeta.preRotationBbox = MaskUtil.bbox_from_mask(nonrotatedMask)
+                else:
+                    refMask.textMeta.preRotationBbox = MaskUtil.bbox_from_mask(mask)
 
             if _rotation != 0:
                 img = PilUtil._apply_rotate(img, _rotation, partial(drawCallback, c=_color), center=_position)
             else:
                 drawCallback(draw, _color)
             return img
+
+    @staticmethod
+    def line(
+        img: pilImage.Image,
+        pt1: VectorVar | PilImageVectorCallback,
+        pt2: VectorVar | PilImageVectorCallback,
+        color: ColorVar,
+        thickness: IntVar,
+        refMask: Mask=None
+    ) -> pilImage.Image:
+        if callable(pt1):
+            pt1 = pt1(img)
+        if callable(pt2):
+            pt2 = pt2(img)
+        pt1 = Convert.cast_vector(pt1)
+        pt2 = Convert.cast_vector(pt2)
+        color = Convert.cast_color(color)
+        thickness = Convert.cast_builtin(thickness)
+
+        draw = pilImageDraw.Draw(img, mode=None)
+        xy = (pt1[0], pt1[1], pt2[0], pt2[1])
+
+        def drawCallback(d: pilImageDraw.ImageDraw, c: tuple[int, int, int]):
+            d.line(xy, fill=c, width=thickness)
+        
+        if refMask is not None:
+            mask = pilImage.new("RGB", (img.width, img.height), color=(0, 0, 0))
+            maskColor = (255, 255, 255)
+            drawCallback(pilImageDraw.Draw(mask, mode=None), maskColor)
+            mask = Convert.pil_to_cv(mask)
+            mask = MaskUtil.eq_color(mask, color=maskColor)
+
+            refMask._mask = mask
+        
+        drawCallback(draw, color)
+        return img
 
     @staticmethod
     def waku(
