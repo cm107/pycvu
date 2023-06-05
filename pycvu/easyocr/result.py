@@ -37,7 +37,10 @@ class OcrResult(Base):
     @classmethod
     def from_easyocr(cls, data: tuple[list, str, float]) -> OcrResult:
         return OcrResult(
-            Quad2.from_list(data[0]),
+            Quad2.from_list([
+                [int(x), int(y)]
+                for x, y in data[0]
+            ]),
             text=data[1],
             score=data[2]
         )
