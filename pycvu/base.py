@@ -270,11 +270,11 @@ class Base:
             setattr(obj, key, val)
         return obj
 
-    def save(self, path: str, **kwargs):
+    def save(self, path: str, indent: int=None, **kwargs):
         ext = os.path.splitext(path)[1]
         if ext == '.json':
             json.dump(self.to_dict(**kwargs), open(path, 'w'),
-                      ensure_ascii=False, sort_keys=False)
+                      ensure_ascii=False, sort_keys=False, indent=indent)
         elif ext == '.yaml':
             yaml.dump(self.to_dict(**kwargs), open(path, 'w'),
                       allow_unicode=True, sort_keys=False)

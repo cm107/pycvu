@@ -304,6 +304,14 @@ def split(
         pbar = tqdm(total=sum([len(s) for s in samples]), unit="image(s)", leave=leavePbar)
         pbar.desc = "Splitting Datasets"
 
+    imgIdxToAnns: dict[int, list[ANN]] = {}
+    _annotations = self._annotations if not showPbar else tqdm(self._annotations, desc='Initializing id map.', leave=False)
+    for ann in _annotations:
+        if ann.image_id not in imgIdxToAnns:
+            imgIdxToAnns[ann.image_id] = [ann]
+        else:
+            imgIdxToAnns[ann.image_id].append(ann)
+
     datasets: list[DS] = []
     for sampleIdxList in samples:
         dataset = type(self)()
@@ -314,8 +322,8 @@ def split(
         for idx in sampleIdxList:
             image = self._images[idx].copy()
             dataset._images.append(image)
-            anns = self._annotations.search(lambda ann: ann.image_id == image.id)
-            dataset._annotations._objects.extend(anns._objects.copy())
+            anns = imgIdxToAnns[image.id]
+            dataset._annotations._objects.extend(anns.copy())
             if showPbar:
                 pbar.update()
         dataset._images.sort(lambda img: img.id)
