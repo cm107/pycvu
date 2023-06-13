@@ -4,6 +4,7 @@ import cv2
 import glob
 from tqdm import tqdm
 import pandas as pd
+import random
 from ....vis.cv import SimpleVisualizer
 
 from typing import TYPE_CHECKING
@@ -56,7 +57,7 @@ def generate_easyocr_recognition_labels(
     df.to_csv(f"{dumpDir}/labels.csv", header=True, index=False)
 
 @classmethod
-def visualize_easyocr_recognition_labels(cls: type[Dataset], dumpDir: str):
+def visualize_easyocr_recognition_labels(cls: type[Dataset], dumpDir: str, shuffle: bool=False):
     assert os.path.isdir(dumpDir)
     labelsPath = f"{dumpDir}/labels.csv"
     assert os.path.isfile(labelsPath)
@@ -66,6 +67,8 @@ def visualize_easyocr_recognition_labels(cls: type[Dataset], dumpDir: str):
         filename = df.iloc[i]['filename']
         words = df.iloc[i]['words']
         pairs.append((filename, words))
+    if shuffle:
+        random.shuffle(pairs)
     vis = SimpleVisualizer()
     with vis.loop(pairs) as loop:
         while not loop.done:
