@@ -31,4 +31,5 @@ class Dataset(DatasetBase):
     from ._preview import PreviewSettings, draw_preview, get_preview_from_image, get_preview_from_image_idx, get_preview, \
         show_preview, show_filename, save_preview, save_filename
     
-    from ._easyocr_related import generate_easyocr_recognition_labels, generate_localization_transcription_gt
+    from ._easyocr_related import generate_easyocr_recognition_labels, visualize_easyocr_recognition_labels, \
+        generate_localization_transcription_gt

@@ -108,6 +108,7 @@ setup(
     entry_points={
         'console_scripts': [
             "pycvu-coco-show_preview=pycvu.coco.cli.show_preview:main",
+            "pycvu-coco-preview_ocr_recognition_labels=pycvu.coco.cli.preview_ocr_recognition_labels:main",
             "pycvu-artist-generate_dataset=pycvu.artist.cli.generate_dataset:main",
         ]
     }

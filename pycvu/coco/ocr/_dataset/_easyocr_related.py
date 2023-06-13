@@ -4,6 +4,7 @@ import cv2
 import glob
 from tqdm import tqdm
 import pandas as pd
+from ....vis.cv import SimpleVisualizer
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -53,6 +54,26 @@ def generate_easyocr_recognition_labels(
     
     df = pd.DataFrame(data)
     df.to_csv(f"{dumpDir}/labels.csv", header=True, index=False)
+
+@classmethod
+def visualize_easyocr_recognition_labels(cls: type[Dataset], dumpDir: str):
+    assert os.path.isdir(dumpDir)
+    labelsPath = f"{dumpDir}/labels.csv"
+    assert os.path.isfile(labelsPath)
+    df = pd.read_csv(labelsPath, header=0, index_col=None)
+    pairs: list[tuple[str, str]] = []
+    for i in range(len(df)):
+        filename = df.iloc[i]['filename']
+        words = df.iloc[i]['words']
+        pairs.append((filename, words))
+    vis = SimpleVisualizer()
+    with vis.loop(pairs) as loop:
+        while not loop.done:
+            filename, words = pairs[loop.index]
+            imgPath = f"{dumpDir}/{filename}"
+            assert os.path.isfile(imgPath)
+            img = cv2.imread(imgPath)
+            vis.show(img, title=words)
 
 def generate_localization_transcription_gt(
     self: Dataset, dumpDir: str,
