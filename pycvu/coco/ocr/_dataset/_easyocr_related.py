@@ -32,8 +32,18 @@ def generate_easyocr_recognition_labels(
     # Create dump directory if it doesn't exist yet
     os.makedirs(dumpDir, exist_ok=True)
 
+    imgIdToAnns = {}
+    for ann in self.annotations:
+        if ann.image_id not in imgIdToAnns:
+            imgIdToAnns[ann.image_id] = [ann]
+        else:
+            imgIdToAnns[ann.image_id].append(ann)
+
     # Crop and save text images
     for image in images:
+        if image.id not in imgIdToAnns:
+            # print(f"Failed to find any annotations for {image.id=} Skipping")
+            continue
         imgFilename = os.path.basename(image.file_name)
         if imgDir is None:
             imgPath = image.file_name
@@ -42,7 +52,8 @@ def generate_easyocr_recognition_labels(
         basename = os.path.splitext(imgFilename)[0]
 
         img = cv2.imread(imgPath)
-        anns = self.annotations.search(lambda ann: ann.image_id == image.id)
+        # anns = self.annotations.search(lambda ann: ann.image_id == image.id)
+        anns = imgIdToAnns[image.id]
         for i, ann in enumerate(anns):
             bbox = ann.bbox2d
             croppedImg = bbox.crop_image(img)

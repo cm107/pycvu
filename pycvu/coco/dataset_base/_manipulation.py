@@ -34,7 +34,20 @@ def combine(cls: type[DS], sources: list[DS | str], showPbar: bool=False) -> DS:
         
         innerPbar = tqdm(total=len(dataset._images), leave=False) if showPbar else None
         dataset._images.sort(lambda image: image.id)
+        
+        imgIdToAnns: dict[int, list[ANN]] = {}
+        for ann in dataset._annotations:
+            if ann.image_id not in imgIdToAnns:
+                imgIdToAnns[ann.image_id] = [ann]
+            else:
+                imgIdToAnns[ann.image_id].append(ann)
+
         for image in dataset._images:
+            if image.id not in imgIdToAnns:
+                # print(f"{image.id=} doesn't have any matching annotations. Skipping.")
+                continue
+            anns = imgIdToAnns[image.id]
+
             # Process License
             license = dataset._licenses.get(lambda lic: lic.id == image.license)
             assert license is not None
@@ -57,7 +70,8 @@ def combine(cls: type[DS], sources: list[DS | str], showPbar: bool=False) -> DS:
             img.license = lic.id
             combined._images.append(img)
 
-            for annotation in dataset._annotations.search(lambda ann: ann.image_id == image.id):
+            # for annotation in dataset._annotations.search(lambda ann: ann.image_id == image.id):
+            for annotation in anns:
                 # Process Category
                 category = dataset._categories.get(lambda cat: cat.id == annotation.category_id)
                 assert category is not None
