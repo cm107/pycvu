@@ -85,7 +85,16 @@ def combine(cls: type[DS], sources: list[DS | str], showPbar: bool=False) -> DS:
                 if cat is None:
                     # New category.
                     cat = category.copy()
-                    cat.id = len(combined._categories)
+                    existingCatIds = [_cat.id for _cat in combined._categories]
+                    if cat.id in existingCatIds:
+                        # Category with same id already exists.
+                        foundValidNewId = False
+                        for newId in range(max(existingCatIds) + 2):
+                            if newId not in existingCatIds:
+                                cat.id = newId
+                                foundValidNewId = True
+                                break
+                        assert foundValidNewId
                     combined._categories.append(cat)
 
                 # Process Annotation
