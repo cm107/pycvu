@@ -9,3 +9,4 @@ from ._loadable_image import LoadableImage, LoadableImageHandler, \
     LoadableImageMask, LoadableImageMaskHandler, ImageVar
 from ._func import *
 from ._debug_timer import DebugTimer
+from ._redirect_std import RedirectStdToFile, SuppressStd, RedirectStdToVariable
