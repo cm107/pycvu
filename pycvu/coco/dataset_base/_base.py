@@ -54,5 +54,6 @@ class DatasetBase(CocoBase):
         setattr(self, 'categories', val)
 
     from ._manipulation import combine, filter, reindex, split
+    from ._smart_filter import smart_filter
 
 DS = TypeVar('DS', bound=DatasetBase)
