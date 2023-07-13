@@ -2,8 +2,6 @@ import os
 import sys
 import io
 
-f = open('file.txt', 'w')
-
 class RedirectStdToFile(object):
     """
     Usage:

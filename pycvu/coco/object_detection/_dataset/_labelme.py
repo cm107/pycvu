@@ -158,6 +158,26 @@ def from_labelme(
                     iscrowd=0
                 )
                 dataset.annotations.append(ann)
+            elif shape.shape_type == LabelmeShapeType.polygon:
+                points = []
+                for point in shape.points:
+                    points += [int(val) for val in list(point)]
+                segmentation = [points]
+                xmin = int(min([p.x for p in shape.points]))
+                ymin = int(min([p.y for p in shape.points]))
+                xmax = int(max([p.x for p in shape.points]))
+                ymax = int(max([p.y for p in shape.points]))
+                bbox = BBox2D(Vector2(xmin, ymin), Vector2(xmax, ymax))
+                ann = Annotation(
+                    id=len(dataset.annotations),
+                    image_id=image.id,
+                    category_id=category.id,
+                    segmentation=segmentation,
+                    area=bbox.area,
+                    bbox=[bbox.v0.x, bbox.v0.y, bbox.xInterval.length, bbox.yInterval.length],
+                    iscrowd=0
+                )
+                dataset.annotations.append(ann)
             else:
                 raise ValueError
         if showPbar:
