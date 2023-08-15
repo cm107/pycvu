@@ -102,7 +102,9 @@ setup(
         'tqdm>=4.64.1',
         # 'pyevu @ git+ssh://git@github.com/cm107/pyevu.git@master',
         'pyevu @ git+https://git@github.com/cm107/pyevu.git@master',
-        'PyMuPDF>=1.19.6'
+        'PyMuPDF>=1.19.6',
+        'pandas',
+        'pycocotools'
     ],
     python_requires='>=3.10',
     entry_points={

@@ -178,6 +178,8 @@ def from_labelme(
                     iscrowd=0
                 )
                 dataset.annotations.append(ann)
+            elif shape.shape_type == LabelmeShapeType.line:
+                print(f"Encountered shape of type {shape.shape_type.value} in {path}. Skipping.")
             else:
                 raise ValueError
         if showPbar:

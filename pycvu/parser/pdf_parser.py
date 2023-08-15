@@ -3,6 +3,7 @@ import os
 import glob
 import json
 import fitz
+from tqdm import tqdm
 import numpy as np
 from PIL import Image
 
@@ -223,6 +224,76 @@ def get_rows(blocks: list[Block], applySort: bool=True) -> list[list[Block]]:
             row.sort(key=lambda block: block.x0)
         rows.sort(key=lambda row: row[0].y0)
     return rows      
+
+def split_row_at_gaps(
+    row: list[Block],
+    gapHeightRatioThresh: float=1.0,
+    gapWidthRatioThresh: float=1.0,
+    heightIouThresh: float=0.5,
+    segmentDepth: int=1, charDepth: int=1
+) -> list[list[Block]]:
+    segments: list[list[Block]] = []
+    for obj in row:
+        lastSegments: list[list[Block]] = segments[-segmentDepth:][::-1] if len(segments) > 0 else None
+
+        if lastSegments is None:
+            segments.append([obj])
+        else:
+            heightIous: list[float] = [
+                Interval.IoU(
+                    Interval.Union(*[_obj.bbox.yInterval for _obj in lastSegment][::-1][:charDepth]),
+                    obj.bbox.yInterval
+                )
+                for lastSegment in lastSegments
+            ]
+            foundMatch = False
+            for heightIou, lastSegment in sorted(
+                [
+                    (_heightIou, _lastSegment)
+                    for _heightIou, _lastSegment in zip(heightIous, lastSegments)
+                ],
+                key=lambda pair: pair[0],
+                reverse=True
+            ):
+                lastBlock: Block = lastSegment[-1]
+                gap = Interval.Gap(lastBlock.bbox.xInterval, obj.bbox.xInterval)
+                gapDistance = gap.length if gap is not None else 0
+                gapHeightRatio = gapDistance / lastBlock.bbox.yInterval.length
+                gapWidthRatio = gapDistance / lastBlock.bbox.xInterval.length
+
+                splitFlag = (
+                    (gapHeightRatioThresh is not None and gapHeightRatio > gapHeightRatioThresh)
+                    or (gapWidthRatioThresh is not None and gapWidthRatio > gapWidthRatioThresh)
+                    or (heightIouThresh is not None and heightIou < heightIouThresh)
+                )
+                if not splitFlag:
+                    lastSegment.append(obj)
+                    lastSegment.sort(key=lambda _obj: _obj.bbox.v0.x)
+                    foundMatch = True
+                    break
+            
+            if not foundMatch:
+                segments.append([obj])
+    return segments
+
+def split_rows_at_gaps(
+    rows: list[list[Block]],
+    gapHeightRatioThresh: float=2.0,
+    gapWidthRatioThresh: float=2.0,
+    heightIouThresh: float=0.6,
+    segmentDepth: int=10, charDepth: int=1,
+    showPbar: bool=False
+) -> list[list[Block]]:
+    segments: list[list[Block]] = []
+    if showPbar:
+        rows = tqdm(rows, desc="Splitting rows at gaps", leave=False)
+    for row in rows:
+        _segments = split_row_at_gaps(
+            row, gapHeightRatioThresh, gapWidthRatioThresh,
+            heightIouThresh, segmentDepth, charDepth
+        )
+        segments.extend(_segments)
+    return segments
 
 def split_image_by_height(
     img: np.ndarray | Image.Image,

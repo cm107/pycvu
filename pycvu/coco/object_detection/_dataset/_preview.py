@@ -1,7 +1,9 @@
 from __future__ import annotations
+from typing import Dict
 import cv2
 import numpy as np
 from pyevu import BBox2D, Vector2
+from pycocotools import mask as pycocotools_mask
 from ....polygon import Segmentation
 from ....util import CvUtil
 from .._result import BBoxResult, SegmentationResult, Result, Results
@@ -27,6 +29,16 @@ class PreviewSettings:
     showResultLabel: bool = False
     showResultScore: bool = True
 
+def rle_to_mask(rle_uncompressed: Dict[str, np.ndarray]) -> np.ndarray:
+    """Decode the uncompressed RLE string to the binary mask (2D np.ndarray)
+
+    The uncompressed RLE string can be obtained by
+    the datumaro.util.mask_tools.mask_to_rle() function
+    """
+    resulting_mask = pycocotools_mask.frPyObjects(rle_uncompressed, *rle_uncompressed["size"])
+    resulting_mask = pycocotools_mask.decode(resulting_mask)
+    return resulting_mask
+
 def draw_preview(self: Dataset, img: np.ndarray, image_id: int, results: Results=None) -> np.ndarray:
     s = PreviewSettings
     if s.showGT:
@@ -35,18 +47,28 @@ def draw_preview(self: Dataset, img: np.ndarray, image_id: int, results: Results
         for ann in anns:
             bbox = BBox2D(
                 Vector2(*ann.bbox[:2]), Vector2(*ann.bbox[:2]) + Vector2(*ann.bbox[2:]))
-            seg = Segmentation.from_coco(ann.segmentation)
-
+            
+            if type(ann.segmentation) is not dict:
+                seg = Segmentation.from_coco(ann.segmentation)
+            else:
+                seg = ann.segmentation
             if seg is not None and s.showSeg:
-                if not s.segIsTransparent:
-                    img = cv2.drawContours(img, contours=seg.to_contours(
-                    ), contourIdx=-1, color=s.segColor, thickness=-1)
+                if type(seg) is not dict:
+                    if not s.segIsTransparent:
+                        img = cv2.drawContours(img, contours=seg.to_contours(
+                        ), contourIdx=-1, color=s.segColor, thickness=-1)
+                    else:
+                        mask = np.zeros_like(img, dtype=np.uint8)
+                        mask = cv2.drawContours(mask, contours=seg.to_contours(
+                        ), contourIdx=-1, color=s.segColor, thickness=-1)
+                        img = cv2.addWeighted(
+                            src1=img, src2=mask, alpha=1, beta=1, gamma=0)
                 else:
-                    mask = np.zeros_like(img, dtype=np.uint8)
-                    mask = cv2.drawContours(mask, contours=seg.to_contours(
-                    ), contourIdx=-1, color=s.segColor, thickness=-1)
+                    mask = rle_to_mask(seg).astype(np.bool_)
+                    colorMask = np.zeros_like(img, dtype=np.uint8)
+                    colorMask[mask] = s.segColor
                     img = cv2.addWeighted(
-                        src1=img, src2=mask, alpha=1, beta=1, gamma=0)
+                        src1=img, src2=colorMask, alpha=1, beta=1, gamma=0)
 
             if bbox is not None and s.showBBox:
                 img = CvUtil.rectangle(

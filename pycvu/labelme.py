@@ -7,6 +7,7 @@ from .base import Base, BaseHandler
 class ShapeType(Enum):
     rectangle = "rectangle"
     polygon = "polygon"
+    line = "line"
 
 class Shape(Base):
     def __init__(
