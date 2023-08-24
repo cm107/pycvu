@@ -11,6 +11,7 @@ from pyevu import BBox2D, Vector2
 from ..util import CvUtil, ColorVar, Convert, PilUtil
 from ..base import Base, BaseHandler
 from ..color import Color
+from datumaro.util.mask_tools import mask_to_rle, rle_to_mask
 
 class FrameData:
     def __init__(
@@ -104,27 +105,45 @@ class FrameInstance(Base):
         self,
         pred_box: BBox2D,
         pred_class: int,
-        score: float
+        score: float,
+        pred_mask: dict=None
     ):
         self.pred_box = pred_box
         self.pred_class = pred_class
         self.score = score
+        self.pred_mask = pred_mask
 
     def to_dict(self) -> dict:
-        return {
+        item_dict = {
             'pred_box': self.pred_box.to_dict(),
             'pred_class': self.pred_class,
             'score': self.score
         }
+        if self.pred_mask is not None:
+            item_dict['pred_mask'] = self.pred_mask
+            item_dict['pred_mask']['counts'] = item_dict['pred_mask']['counts'].tolist()
+        return item_dict
 
     @classmethod
     def from_dict(cls, item_dict: dict) -> FrameInstance:
+        if 'pred_mask' in item_dict:
+            pred_mask = item_dict['pred_mask']
+            pred_mask['counts'] = np.array(pred_mask['counts'], dtype=np.uint32)
+        else:
+            pred_mask = None
         return FrameInstance(
             pred_box=BBox2D.from_dict(item_dict['pred_box']),
             pred_class=item_dict['pred_class'],
-            score=item_dict['score']
+            score=item_dict['score'],
+            pred_mask=pred_mask
         )
     
+    @property
+    def bool_mask(self) -> np.ndarray:
+        if self.pred_mask is None:
+            return None
+        return rle_to_mask(self.pred_mask).astype(np.bool_)
+
     def _draw(self, img: np.ndarray, labels: list[str]=None) -> np.ndarray:
         # img = CvUtil.rectangle(
         #     img=img,
@@ -204,12 +223,20 @@ class FrameInstances(BaseHandler[FrameInstance]):
     def from_raw_instances(cls, instances: Instances) -> FrameInstances:
         fields: dict[str, Any] = instances._fields
         # image_height, image_width = instances._image_size
+        
         pred_boxes: Boxes = fields['pred_boxes'] if 'pred_boxes' in fields else None
         if pred_boxes is not None:
             pred_boxes: list[BBox2D] = [
                 BBox2D(Vector2(*vals[:2]), Vector2(*vals[2:]))
                 for vals in pred_boxes.tensor.tolist()
             ]
+        pred_masks: torch.Tensor = fields['pred_masks'] if 'pred_masks' in fields else None
+        if pred_masks is not None:
+            pred_masks = [np.array(mask, dtype=np.bool_) for mask in pred_masks.tolist()]
+            pred_masks = [mask_to_rle(mask) for mask in pred_masks]
+        else:
+            pred_masks = [None] * len(pred_boxes)
+
         pred_classes: torch.Tensor = fields['pred_classes'] if 'pred_classes' in fields else None
         pred_classes: list[int] = pred_classes.tolist()
         scores: torch.Tensor = fields['scores'] if 'scores' in fields else None
@@ -221,9 +248,9 @@ class FrameInstances(BaseHandler[FrameInstance]):
         assert scores is not None
         return FrameInstances(
             [
-                FrameInstance(pred_box, pred_class, score)
-                for pred_box, pred_class, score in zip(
-                    pred_boxes, pred_classes, scores
+                FrameInstance(pred_box, pred_class, score, pred_mask)
+                for pred_box, pred_class, score, pred_mask in zip(
+                    pred_boxes, pred_classes, scores, pred_masks
                 )
             ],
             _image_size=instances._image_size
